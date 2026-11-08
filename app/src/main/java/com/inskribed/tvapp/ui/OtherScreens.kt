@@ -125,6 +125,24 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
 
+        item { SettingHeader("Sports") }
+        item {
+            SettingToggle(
+                title = "Scores",
+                value = if (vm.showScores) "Shown" else "Hidden",
+                hint = "Hide scores to avoid spoilers. Game times and channels still show.",
+                onClick = { vm.updateShowScores(!vm.showScores) },
+            )
+        }
+        item {
+            SettingToggle(
+                title = "My teams",
+                value = if (vm.favoriteTeams.isEmpty()) "None yet" else "${vm.favoriteTeams.size} selected",
+                hint = "Choose favorite teams in the NFL, NBA, MLB, NHL and NCAAF.",
+                onClick = { vm.showTeamPicker = true },
+            )
+        }
+
         item { SettingHeader("Appearance") }
         item {
             SettingToggle(

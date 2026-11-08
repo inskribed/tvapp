@@ -72,7 +72,27 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_COMPACT, false)
         set(v) = sp.edit().putBoolean(KEY_COMPACT, v).apply()
 
+    var showScores: Boolean
+        get() = sp.getBoolean(KEY_SCORES, true)
+        set(v) = sp.edit().putBoolean(KEY_SCORES, v).apply()
+
+    fun favoriteTeams(): List<String> {
+        val raw = sp.getString(KEY_TEAMS, null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveFavoriteTeams(keys: List<String>) {
+        val arr = JSONArray()
+        keys.forEach { arr.put(it) }
+        sp.edit().putString(KEY_TEAMS, arr.toString()).apply()
+    }
+
     private companion object {
+        const val KEY_SCORES = "show_scores"
+        const val KEY_TEAMS = "favorite_teams"
         const val KEY_COMPACT = "compact_list"
         const val KEY_PLAYLISTS = "playlists"
         const val KEY_ACTIVE = "active_playlist"

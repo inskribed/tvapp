@@ -16,6 +16,14 @@ import com.inskribed.tvapp.data.Playlist
 import com.inskribed.tvapp.data.Prefs
 import com.inskribed.tvapp.data.Repository
 import com.inskribed.tvapp.data.XtreamClient
+import com.inskribed.tvapp.data.ChannelMatcher
+import com.inskribed.tvapp.data.Game
+import com.inskribed.tvapp.data.GameState
+import com.inskribed.tvapp.data.League
+import com.inskribed.tvapp.data.SportsClient
+import com.inskribed.tvapp.data.Team
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -27,6 +35,7 @@ import java.util.concurrent.TimeUnit
 
 enum class Section(val label: String) {
     LIVE("Live TV"),
+    SPORTS("Sports"),
     FAVORITES("Favorites"),
     SEARCH("Search"),
     SETTINGS("Settings"),
@@ -94,6 +103,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var playIndex by mutableStateOf(-1)
         private set
     val currentChannel: Channel? get() = playQueue.getOrNull(playIndex)
+
+    // Sports
+    private val sports = SportsClient(http)
+    var games by mutableStateOf<Map<League, List<Game>>>(emptyMap())
+        private set
+    var sportsLoading by mutableStateOf(false)
+        private set
+    var sportsError by mutableStateOf<String?>(null)
+        private set
+    var sportsUpdatedMs by mutableStateOf(0L)
+        private set
+    var favoriteTeams by mutableStateOf(prefs.favoriteTeams())
+        private set
+    var showScores by mutableStateOf(prefs.showScores)
+        private set
+    var teams by mutableStateOf<Map<League, List<Team>>>(emptyMap())
+        private set
+    var teamsError by mutableStateOf<String?>(null)
+        private set
+    var gameDetail by mutableStateOf<Game?>(null)
+    var showTeamPicker by mutableStateOf(false)
+    private var matcher: ChannelMatcher? = null
+    private var matcherFor: List<Channel>? = null
+    private val matchCache = HashMap<String, List<Channel>>()
 
     /** After leaving the player, the list focuses this channel again. */
     var pendingFocusKey by mutableStateOf<String?>(null)
@@ -208,6 +241,84 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         is UnknownHostException -> "Can't find that server. Check the address."
         is SocketTimeoutException -> "The server took too long to respond."
         else -> e.message ?: "Something went wrong."
+    }
+
+    // ---- Sports ----------------------------------------------------------
+
+    fun refreshSports() {
+        if (sportsLoading) return
+        viewModelScope.launch {
+            sportsLoading = true
+            try {
+                val results = League.entries.map { l -> async { l to runCatching { sports.games(l) } } }.awaitAll()
+                val next = games.toMutableMap()
+                var failures = 0
+                for ((l, r) in results) {
+                    r.onSuccess { next[l] = it }.onFailure { failures++ }
+                }
+                games = next
+                matchCache.clear()
+                sportsError = if (failures == League.entries.size) "Couldn't reach the scores service." else null
+                sportsUpdatedMs = System.currentTimeMillis()
+            } finally {
+                sportsLoading = false
+            }
+        }
+    }
+
+    val anyLive: Boolean get() = games.values.any { list -> list.any { it.state == GameState.LIVE } }
+
+    fun sortedGames(list: List<Game>): List<Game> = list.sortedWith(
+        compareBy<Game> { when (it.state) { GameState.LIVE -> 0; GameState.PRE -> 1; GameState.POST -> 2 } }
+            .thenBy { if (it.state == GameState.POST) -it.startMs else it.startMs }
+    )
+
+    fun myGames(): List<Game> =
+        sortedGames(games.values.flatten().filter { it.involves(favoriteTeams) })
+
+    fun liveGames(): List<Game> = sortedGames(games.values.flatten().filter { it.state == GameState.LIVE })
+
+    fun matchesFor(game: Game): List<Channel> {
+        if (matcherFor !== channels) {
+            matcher = ChannelMatcher(channels)
+            matcherFor = channels
+            matchCache.clear()
+        }
+        val key = game.id + "|" + game.networks.joinToString(",")
+        return matchCache.getOrPut(key) { matcher?.match(game).orEmpty() }
+    }
+
+    fun loadTeams(league: League) {
+        if (teams[league] != null) return
+        viewModelScope.launch {
+            teamsError = null
+            try {
+                val list = sports.teams(league)
+                teams = teams + (league to list)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                teamsError = "Couldn't load teams: ${friendly(e)}"
+            }
+        }
+    }
+
+    fun isFavoriteTeam(t: Team) = t.key in favoriteTeams
+
+    fun toggleTeam(t: Team) {
+        favoriteTeams = if (t.key in favoriteTeams) favoriteTeams - t.key else favoriteTeams + t.key
+        prefs.saveFavoriteTeams(favoriteTeams)
+    }
+
+    fun updateShowScores(value: Boolean) {
+        showScores = value
+        prefs.showScores = value
+    }
+
+    fun openSearch(query: String) {
+        gameDetail = null
+        searchQuery = query
+        section = Section.SEARCH
     }
 
     // ---- Favorites -------------------------------------------------------

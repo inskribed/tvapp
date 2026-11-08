@@ -31,13 +31,14 @@ import kotlinx.coroutines.delay
 @Composable
 fun AppRoot(vm: AppViewModel) {
     Box(Modifier.fillMaxSize().background(AppColors.Bg)) {
-        if (vm.showAddPlaylist) {
-            AddPlaylistScreen(vm)
-        } else {
-            MainScreen(vm)
-            if (vm.currentChannel != null) {
-                PlayerScreen(vm)
-            }
+        when {
+            vm.showAddPlaylist -> AddPlaylistScreen(vm)
+            vm.showTeamPicker -> TeamPickerScreen(vm)
+            vm.gameDetail != null -> GameDetailScreen(vm)
+            else -> MainScreen(vm)
+        }
+        if (vm.currentChannel != null && !vm.showAddPlaylist && !vm.showTeamPicker) {
+            PlayerScreen(vm)
         }
     }
 }
@@ -54,6 +55,7 @@ private fun MainScreen(vm: AppViewModel) {
         ) {
             when (vm.section) {
                 Section.LIVE -> LiveTvScreen(vm)
+                Section.SPORTS -> SportsScreen(vm)
                 Section.FAVORITES -> FavoritesScreen(vm)
                 Section.SEARCH -> SearchScreen(vm)
                 Section.SETTINGS -> SettingsScreen(vm)
