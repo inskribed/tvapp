@@ -6,11 +6,8 @@ A personal IPTV player for Android TV / Google TV (Nvidia Shield, onn 4K Plus).
 
 1. Install **Downloader** (by AFTVnews) from the Play Store.
 2. Allow it to install apps: Settings → Apps → Security & restrictions → Unknown sources → Downloader → On.
-3. In Downloader, enter:
-
-   ```
-   https://github.com/inskribed/tvapp/releases/latest/download/tvapp.apk
-   ```
+3. In Downloader, enter the code **1320771**
+   (or the full link: `https://github.com/inskribed/tvapp/releases/latest/download/tvapp.apk`).
 
 4. Install. To update later, repeat step 3. Your playlists and favorites stay.
 
