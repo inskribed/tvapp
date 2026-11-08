@@ -286,6 +286,12 @@ fun GameDetailScreen(vm: AppViewModel) {
         delay(80)
         runCatching { firstFocus.requestFocus() }
     }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(if (game.state == GameState.LIVE) 30_000 else 120_000)
+            vm.refreshSports()
+        }
+    }
 
     Row(Modifier.fillMaxSize().background(AppColors.Bg).padding(horizontal = 56.dp, vertical = 40.dp)) {
         Column(Modifier.width(460.dp).fillMaxHeight()) {
