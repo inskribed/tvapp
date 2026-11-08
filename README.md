@@ -1,4 +1,4 @@
-# TV App
+# Remo
 
 A personal IPTV player for Android TV / Google TV (Nvidia Shield, onn 4K Plus).
 

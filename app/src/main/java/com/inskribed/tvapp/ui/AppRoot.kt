@@ -78,7 +78,7 @@ private fun Sidebar(vm: AppViewModel) {
             .padding(horizontal = 14.dp, vertical = 32.dp)
     ) {
         Text(
-            "TV App",
+            "Remo",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = AppColors.Text,

@@ -10,7 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
-const val USER_AGENT = "TVApp/0.1 (Linux; Android)"
+const val USER_AGENT = "Remo/0.1 (Linux; Android)"
 
 /** Talks to an Xtream Codes compatible server (player_api.php). */
 class XtreamClient(private val http: OkHttpClient) {
