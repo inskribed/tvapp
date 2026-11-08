@@ -68,7 +68,12 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_INVERT, false)
         set(v) = sp.edit().putBoolean(KEY_INVERT, v).apply()
 
+    var compactList: Boolean
+        get() = sp.getBoolean(KEY_COMPACT, false)
+        set(v) = sp.edit().putBoolean(KEY_COMPACT, v).apply()
+
     private companion object {
+        const val KEY_COMPACT = "compact_list"
         const val KEY_PLAYLISTS = "playlists"
         const val KEY_ACTIVE = "active_playlist"
         const val KEY_FAVORITES = "favorites"

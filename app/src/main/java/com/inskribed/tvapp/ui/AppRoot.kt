@@ -31,7 +31,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun AppRoot(vm: AppViewModel) {
     Box(Modifier.fillMaxSize().background(AppColors.Bg)) {
-        if (vm.playlists.isEmpty() || vm.showAddPlaylist) {
+        if (vm.showAddPlaylist) {
             AddPlaylistScreen(vm)
         } else {
             MainScreen(vm)

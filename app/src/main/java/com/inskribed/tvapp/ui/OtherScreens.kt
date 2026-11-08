@@ -125,6 +125,16 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
 
+        item { SettingHeader("Appearance") }
+        item {
+            SettingToggle(
+                title = "Channel list size",
+                value = if (vm.compact) "Compact" else "Comfortable",
+                hint = "Compact fits more channels on screen.",
+                onClick = { vm.updateCompact(!vm.compact) },
+            )
+        }
+
         item { SettingHeader("Playback") }
         item {
             SettingToggle(
@@ -179,7 +189,7 @@ fun AddPlaylistScreen(vm: AppViewModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
-    val canCancel = vm.playlists.isNotEmpty()
+    val canCancel = true
     androidx.activity.compose.BackHandler(enabled = canCancel) { vm.showAddPlaylist = false }
 
     LaunchedEffect(Unit) {
@@ -200,7 +210,7 @@ fun AddPlaylistScreen(vm: AppViewModel) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(Modifier.width(620.dp)) {
             ScreenTitle(
-                if (canCancel) "Add a playlist" else "Welcome",
+                "Add a playlist",
                 "Enter the Xtream Codes login from your provider.",
             )
             TvTextField(name, { name = it }, "Name (optional)", Modifier.fillMaxWidth().focusRequester(first),

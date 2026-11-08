@@ -69,6 +69,7 @@ fun TvRow(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
+    verticalPadding: Int = 10,
     content: @Composable RowScope.() -> Unit,
 ) {
     Surface(
@@ -87,7 +88,7 @@ fun TvRow(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = verticalPadding.dp),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
@@ -218,17 +219,23 @@ fun ChannelRow(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     playing: Boolean = false,
+    compact: Boolean = false,
 ) {
-    TvRow(onClick = onClick, onLongClick = onLongClick, modifier = modifier) {
+    TvRow(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier,
+        verticalPadding = if (compact) 4 else 10,
+    ) {
         Text(
             channel.num.toString(),
-            modifier = Modifier.width(56.dp),
-            fontSize = 15.sp,
+            modifier = Modifier.width(if (compact) 48.dp else 56.dp),
+            fontSize = if (compact) 13.sp else 15.sp,
             color = LocalContentColor.current.copy(alpha = 0.55f),
         )
         Box(
             modifier = Modifier
-                .size(width = 64.dp, height = 40.dp)
+                .size(width = if (compact) 44.dp else 64.dp, height = if (compact) 26.dp else 40.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0x22FFFFFF)),
             contentAlignment = Alignment.Center,
@@ -238,17 +245,17 @@ fun ChannelRow(
                     model = channel.logo,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.padding(4.dp),
+                    modifier = Modifier.padding(if (compact) 2.dp else 4.dp),
                 )
             } else {
-                Text(channel.name.take(2).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(channel.name.take(2).uppercase(), fontSize = if (compact) 10.sp else 13.sp, fontWeight = FontWeight.Bold)
             }
         }
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(if (compact) 12.dp else 16.dp))
         Text(
             channel.name,
             modifier = Modifier.weight(1f),
-            fontSize = 18.sp,
+            fontSize = if (compact) 15.sp else 18.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontWeight = if (playing) FontWeight.Bold else FontWeight.Normal,
@@ -277,7 +284,7 @@ fun ChannelList(
         state = listState,
         modifier = modifier,
         contentPadding = PaddingValues(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(if (vm.compact) 0.dp else 2.dp),
     ) {
         itemsIndexed(channels, key = { _, c -> c.key }) { index, ch ->
             val fr = remember { FocusRequester() }
@@ -294,6 +301,7 @@ fun ChannelList(
                 onClick = { vm.play(channels, index) },
                 onLongClick = { vm.toggleFavorite(ch) },
                 modifier = Modifier.focusRequester(fr),
+                compact = vm.compact,
             )
         }
     }

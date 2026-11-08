@@ -101,16 +101,24 @@ fun PlayerScreen(vm: AppViewModel) {
     var infoToken by remember { mutableIntStateOf(0) }
     var firstStart by remember { mutableStateOf(true) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
+    var paused by remember { mutableStateOf(false) }
 
     fun showOverlay() {
         showInfo = true
         infoToken++
     }
 
+    fun setPaused(value: Boolean) {
+        paused = value
+        player.playWhenReady = !value
+        showOverlay()
+    }
+
     fun start() {
         retryJob?.cancel()
         failed = false
         retries = 0
+        paused = false
         val item = vm.mediaItem(channel)
         if (item == null) {
             failed = true
@@ -180,7 +188,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
     LaunchedEffect(infoToken) {
         delay(5_000)
-        if (!failed) showInfo = false
+        if (!failed && !paused) showInfo = false
     }
 
     LaunchedEffect(Unit) {
@@ -205,13 +213,15 @@ fun PlayerScreen(vm: AppViewModel) {
                     KeyEvent.KEYCODE_DPAD_DOWN -> { if (isDown) vm.zap(-upDelta); true }
                     KeyEvent.KEYCODE_CHANNEL_UP -> { if (isDown) vm.zap(1); true }
                     KeyEvent.KEYCODE_CHANNEL_DOWN -> { if (isDown) vm.zap(-1); true }
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> {
                         if (isDown && e.nativeKeyEvent.repeatCount == 0) {
-                            if (failed) start()
-                            if (showInfo && !failed) showInfo = false else showOverlay()
+                            if (failed) { start(); showOverlay() } else setPaused(!paused)
                         }
                         true
                     }
+                    KeyEvent.KEYCODE_MEDIA_PLAY -> { if (isDown) { if (failed) start() else setPaused(false) }; true }
+                    KeyEvent.KEYCODE_MEDIA_PAUSE -> { if (isDown && !failed) setPaused(true); true }
                     KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_INFO -> {
                         if (isDown) showOverlay(); true
                     }
@@ -240,7 +250,19 @@ fun PlayerScreen(vm: AppViewModel) {
             },
         )
 
-        if (status.isNotEmpty() && !showInfo) {
+        if (paused) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(40.dp))
+                    .background(Color(0xAA000000))
+                    .padding(horizontal = 36.dp, vertical = 18.dp)
+            ) {
+                Text("❚❚  Paused", fontSize = 26.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        if (status.isNotEmpty() && !showInfo && !paused) {
             Text(
                 status,
                 fontSize = 15.sp,
@@ -310,7 +332,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         ).joinToString("  ·  ")
                         Text(line, fontSize = 16.sp, color = if (failed) AppColors.Danger else AppColors.TextDim)
                     }
-                    Text("▲▼ change channel   BACK exit", fontSize = 14.sp, color = AppColors.TextDim)
+                    Text("OK pause/play   ▲▼ channel   BACK exit", fontSize = 14.sp, color = AppColors.TextDim)
                 }
             }
         }

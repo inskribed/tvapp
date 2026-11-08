@@ -82,6 +82,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var invertKeys by mutableStateOf(prefs.invertChannelKeys)
         private set
+    var compact by mutableStateOf(prefs.compactList)
+        private set
+
+    /** Text filter for the Live TV channel list. */
+    var liveFilter by mutableStateOf("")
 
     // Playback
     var playQueue by mutableStateOf<List<Channel>>(emptyList())
@@ -246,6 +251,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun updateStreamFormat(format: String) {
         streamFormat = format
         prefs.streamFormat = format
+    }
+
+    fun updateCompact(value: Boolean) {
+        compact = value
+        prefs.compactList = value
+    }
+
+    fun filterChannels(list: List<Channel>, filter: String): List<Channel> {
+        val words = filter.trim().split(' ').map { normalize(it) }.filter { it.isNotEmpty() }
+        if (words.isEmpty()) return list
+        return list.filter { ch ->
+            val n = normalize(ch.name)
+            words.all { n.contains(it) }
+        }
     }
 
     fun updateInvertKeys(value: Boolean) {
