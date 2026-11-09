@@ -57,3 +57,23 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
 3. Multi-view (Shield ~4 tiles, onn ~2; limited by provider connections)
 4. Recording to USB drive (Shield has USB-A; onn needs a USB-C hub)
 5. Proper Remo icon/banner, in-app update prompt
+
+## Owner's Mac test setup (adb shortcuts)
+
+The owner has Homebrew + `android-platform-tools` (adb 37) on their MacBook and
+these shortcuts in `~/.zshrc` (between `# --- Remo shortcuts ---` markers):
+
+- `remo-update` — downloads the latest release APK to `~/Downloads/tvapp.apk`,
+  installs it with `adb install -r` on every box in `REMO_BOXES`, then launches it.
+- `remo-log` — live `logcat` filtered to the app's process (`pidof com.inskribed.tvapp`).
+- `REMO_BOXES=(192.168.0.216:5555)` — Shield (Network debugging, authorized).
+  onn is `192.168.0.215` (DHCP reservation) but not reachable from the Mac yet
+  (ARP "incomplete"; wireless pairing fails) — unresolved.
+
+**When the app is renamed** (currently "Remo"), give the owner an updated
+shortcuts block to replace the old one in `~/.zshrc`: rename `remo-update`,
+`remo-log`, `REMO_BOXES` and the marker comments to match. If the repo name or
+release asset name (`tvapp.apk`) changes, update the download URL there too, and
+the Downloader code note above. Do NOT change `applicationId`
+(`com.inskribed.tvapp`) as part of a rename — the display name lives in
+`app/src/main/res/values/strings.xml` (`app_name`) and can change freely.
