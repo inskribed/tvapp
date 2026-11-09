@@ -14,7 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -32,6 +35,7 @@ import kotlinx.coroutines.delay
 fun AppRoot(vm: AppViewModel) {
     Box(Modifier.fillMaxSize().background(AppColors.Bg)) {
         when {
+            vm.showUpdatePrompt && vm.update != null && vm.currentChannel == null -> UpdateScreen(vm)
             vm.showAddPlaylist -> AddPlaylistScreen(vm)
             vm.showTeamPicker -> TeamPickerScreen(vm)
             vm.gameDetail != null -> GameDetailScreen(vm)
@@ -55,6 +59,7 @@ private fun MainScreen(vm: AppViewModel) {
         ) {
             when (vm.section) {
                 Section.LIVE -> LiveTvScreen(vm)
+                Section.GUIDE -> GuideScreen(vm)
                 Section.SPORTS -> SportsScreen(vm)
                 Section.FAVORITES -> FavoritesScreen(vm)
                 Section.SEARCH -> SearchScreen(vm)
@@ -64,6 +69,7 @@ private fun MainScreen(vm: AppViewModel) {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun Sidebar(vm: AppViewModel) {
     val focusManager = LocalFocusManager.current
@@ -74,6 +80,8 @@ private fun Sidebar(vm: AppViewModel) {
     }
     Column(
         Modifier
+            .focusProperties { enter = { firstFocus } }
+            .focusGroup()
             .width(220.dp)
             .fillMaxHeight()
             .background(AppColors.Panel)

@@ -2,6 +2,7 @@ package com.inskribed.tvapp
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -22,6 +23,11 @@ import com.inskribed.tvapp.data.GameState
 import com.inskribed.tvapp.data.League
 import com.inskribed.tvapp.data.SportsClient
 import com.inskribed.tvapp.data.Team
+import com.inskribed.tvapp.data.Program
+import com.inskribed.tvapp.data.UpdateInfo
+import com.inskribed.tvapp.data.Updater
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
@@ -35,6 +41,7 @@ import java.util.concurrent.TimeUnit
 
 enum class Section(val label: String) {
     LIVE("Live TV"),
+    GUIDE("TV Guide"),
     SPORTS("Sports"),
     FAVORITES("Favorites"),
     SEARCH("Search"),
@@ -42,6 +49,13 @@ enum class Section(val label: String) {
 }
 
 const val ALL_CATEGORIES = "__all__"
+const val FAVORITES_CATEGORY = "__fav__"
+private const val EPG_FRESH_MS = 30 * 60 * 1000L
+private const val EPG_RETRY_MS = 5 * 60 * 1000L
+private const val EPG_MAX_CHANNELS = 800
+
+/** Guide data for one channel. */
+class EpgEntry(val programs: List<Program>, val fetchedMs: Long, val failed: Boolean)
 private const val REFRESH_AFTER_MS = 12 * 60 * 60 * 1000L
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -128,6 +142,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var matcherFor: List<Channel>? = null
     private val matchCache = HashMap<String, List<Channel>>()
 
+    // TV guide
+    /** Guide data by channel key. Only channels that have been on screen are fetched. */
+    val epg = mutableStateMapOf<String, EpgEntry>()
+    private val epgGate = Semaphore(4)
+    var guideCategory by mutableStateOf(if (favorites.isNotEmpty()) FAVORITES_CATEGORY else ALL_CATEGORIES)
+
+    // In-app updates
+    private val updater = Updater(app, http)
+    var update by mutableStateOf<UpdateInfo?>(null)
+        private set
+    var showUpdatePrompt by mutableStateOf(false)
+    var checkingUpdate by mutableStateOf(false)
+        private set
+    var updateStatus by mutableStateOf<String?>(null)
+        private set
+    var updateProgress by mutableStateOf<Float?>(null)
+        private set
+    private var updateJob: Job? = null
+
     /** After leaving the player, the list focuses this channel again. */
     var pendingFocusKey by mutableStateOf<String?>(null)
 
@@ -135,6 +168,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         loadActive()
+        checkForUpdate(manual = false)
     }
 
     fun categoryName(id: String): String? = categories.firstOrNull { it.id == id }?.name
@@ -181,6 +215,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         channels = emptyList()
         account = null
         selectedCategory = ALL_CATEGORIES
+        epg.clear()
         loadActive()
     }
 
@@ -319,6 +354,100 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         gameDetail = null
         searchQuery = query
         section = Section.SEARCH
+    }
+
+    // ---- TV guide --------------------------------------------------------
+
+    fun guideChannels(category: String): List<Channel> = when (category) {
+        FAVORITES_CATEGORY -> favoriteChannels()
+        ALL_CATEGORIES -> channels
+        else -> channels.filter { it.categoryId == category }
+    }
+
+    /** Fetches guide data for a channel if it's missing or stale. At most 4 requests run at once. */
+    suspend fun ensureEpg(ch: Channel) {
+        if (ch.epgId.isNullOrBlank()) return
+        val p = playlists.find { it.id == ch.playlistId } ?: return
+        fun fresh(e: EpgEntry?): Boolean {
+            if (e == null) return false
+            val age = System.currentTimeMillis() - e.fetchedMs
+            return age < if (e.failed) EPG_RETRY_MS else EPG_FRESH_MS
+        }
+        if (fresh(epg[ch.key])) return
+        epgGate.withPermit {
+            if (fresh(epg[ch.key])) return
+            val entry = try {
+                EpgEntry(client.shortEpg(p, ch.streamId), System.currentTimeMillis(), false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                EpgEntry(emptyList(), System.currentTimeMillis(), true)
+            }
+            if (epg.size > EPG_MAX_CHANNELS) epg.keys.take(EPG_MAX_CHANNELS / 4).toList().forEach { epg.remove(it) }
+            epg[ch.key] = entry
+        }
+    }
+
+    /** The program on now and the one after it, if the guide has them. */
+    fun nowAndNext(ch: Channel): Pair<Program?, Program?> {
+        val list = epg[ch.key]?.programs ?: return null to null
+        val now = System.currentTimeMillis()
+        val i = list.indexOfFirst { now >= it.startMs && now < it.endMs }
+        if (i < 0) return null to list.firstOrNull { it.startMs > now }
+        return list[i] to list.getOrNull(i + 1)
+    }
+
+    // ---- Updates ---------------------------------------------------------
+
+    fun checkForUpdate(manual: Boolean) {
+        if (checkingUpdate) return
+        viewModelScope.launch {
+            checkingUpdate = true
+            if (manual) updateStatus = null
+            try {
+                val info = updater.latest()
+                if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                    update = info
+                    showUpdatePrompt = true
+                } else if (manual) {
+                    updateStatus = "You're on the latest version."
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (manual) updateStatus = "Couldn't check for updates: ${friendly(e)}"
+            } finally {
+                checkingUpdate = false
+            }
+        }
+    }
+
+    fun installUpdate() {
+        val info = update ?: return
+        if (updateJob?.isActive == true) return
+        if (!updater.canInstall()) {
+            updateStatus = if (updater.openInstallPermission()) {
+                "First, allow Remo to install updates: turn Remo on in the screen that opened, press Back, then choose Install again."
+            } else {
+                "First, allow Remo to install updates: Settings → Apps (or Device Preferences) → Security & restrictions → Unknown sources → turn on Remo. Then choose Install again."
+            }
+            return
+        }
+        updateJob = viewModelScope.launch {
+            updateStatus = "Downloading…"
+            updateProgress = 0f
+            try {
+                val file = updater.download(info) { updateProgress = it }
+                updateStatus = "Opening the installer…"
+                updater.install(file)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateStatus = "Update failed: ${friendly(e)}"
+            } finally {
+                updateProgress = null
+            }
+        }
     }
 
     // ---- Favorites -------------------------------------------------------

@@ -39,3 +39,11 @@ data class AccountInfo(
     val activeConnections: Int?,
     val message: String?,
 )
+
+/** One TV guide entry. Times are epoch milliseconds. */
+data class Program(
+    val title: String,
+    val description: String?,
+    val startMs: Long,
+    val endMs: Long,
+)

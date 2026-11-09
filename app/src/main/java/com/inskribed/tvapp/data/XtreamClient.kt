@@ -2,6 +2,7 @@ package com.inskribed.tvapp.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.util.Base64
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -9,6 +10,8 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 const val USER_AGENT = "Remo/0.1 (Linux; Android)"
 
@@ -61,6 +64,57 @@ class XtreamClient(private val http: OkHttpClient) {
 
     suspend fun rawLiveCategories(p: Playlist): String = get(apiUrl(p, "get_live_categories"))
     suspend fun rawLiveStreams(p: Playlist): String = get(apiUrl(p, "get_live_streams"))
+
+    /** Guide entries for one channel, from now on. */
+    suspend fun shortEpg(p: Playlist, streamId: String, limit: Int = 24): List<Program> {
+        val url = apiUrl(p, "get_short_epg").newBuilder()
+            .addQueryParameter("stream_id", streamId)
+            .addQueryParameter("limit", limit.toString())
+            .build()
+        return parseEpg(get(url))
+    }
+
+    fun parseEpg(raw: String): List<Program> {
+        // Servers with no data sometimes answer with [] instead of an object.
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyList()
+        val arr = root.optJSONArray("epg_listings") ?: return emptyList()
+        val out = ArrayList<Program>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val start = o.str("start_timestamp")?.toLongOrNull()?.times(1000) ?: parseTime(o.str("start")) ?: continue
+            val end = (o.str("stop_timestamp") ?: o.str("end_timestamp"))?.toLongOrNull()?.times(1000)
+                ?: parseTime(o.str("end") ?: o.str("stop")) ?: continue
+            if (end <= start) continue
+            out += Program(
+                title = decode(o.str("title")) ?: "Untitled",
+                description = decode(o.str("description")),
+                startMs = start,
+                endMs = end,
+            )
+        }
+        out.sortBy { it.startMs }
+        // Drop overlapping duplicates so the guide grid lines up.
+        val clean = ArrayList<Program>(out.size)
+        for (prog in out) {
+            val last = clean.lastOrNull()
+            if (last != null && prog.startMs < last.endMs) continue
+            clean += prog
+        }
+        return clean
+    }
+
+    /** Xtream sends guide text base64-encoded. Falls back to the raw text if it isn't. */
+    private fun decode(s: String?): String? {
+        if (s.isNullOrBlank()) return null
+        val decoded = runCatching { String(Base64.decode(s, Base64.DEFAULT), Charsets.UTF_8) }.getOrNull()
+        val text = if (decoded == null || decoded.contains('\uFFFD')) s else decoded
+        return text.trim().takeIf { it.isNotEmpty() }
+    }
+
+    private fun parseTime(s: String?): Long? {
+        if (s == null) return null
+        return runCatching { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(s)?.time }.getOrNull()
+    }
 
     fun parseCategories(raw: String): List<Category> {
         val arr = JSONArray(raw)

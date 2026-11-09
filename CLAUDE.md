@@ -39,9 +39,14 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
   (`/live/{user}/{pass}/{id}.ts|m3u8`). Fields may be strings or numbers; use `str()`.
 - `data/Repository.kt` — caches category/stream JSON on disk, refreshes after 12h.
 - `data/Prefs.kt` — SharedPreferences (playlists, favorites, favorite teams, settings).
+- `data/Updater.kt` — in-app updater: GitHub `releases/latest`, compares the tag's
+  build number (`v0.1.N`) with `versionCode` (both = CI run number), downloads
+  `tvapp.apk` to cache, installs via FileProvider (`${applicationId}.files`).
 - `data/Sports.kt` — ESPN public scoreboard/teams (`site.api.espn.com`) and
   `ChannelMatcher` (matches games to channels by network aliases and team names).
-- `ui/` — `AppRoot` (screen switching + sidebar), `LiveTvScreen`, `SportsScreen`
+- `ui/` — `AppRoot` (screen switching + sidebar), `LiveTvScreen`, `GuideScreen` (EPG grid:
+  2-hour window, ◀▶ at the edge shifts time, per-channel `get_short_epg` fetched lazily for
+  visible rows, max 4 at once, cached 30 min in `AppViewModel.epg`), `SportsScreen`
   (game rows, game detail, team picker), `OtherScreens` (Favorites, Search, Settings,
   Add playlist), `Components` (TvRow, TvButton, TvTextField, ChannelList),
   `player/PlayerScreen` (ExoPlayer, reconnect, channel up/down, pause).
@@ -56,11 +61,12 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
 
 ## Roadmap
 
-1. TV guide grid (EPG via `get_short_epg` / `xmltv.php`), program search, guide-based sports matching
+1. ~~TV guide grid~~ (done). Still to do: program search and guide-based sports matching
+   (need bulk EPG, e.g. `xmltv.php` — watch memory on the 2GB onn)
 2. Tune sports channel matching from the owner's real channel names
 3. Multi-view (Shield ~4 tiles, onn ~2; limited by provider connections)
 4. Recording to USB drive (Shield has USB-A; onn needs a USB-C hub)
-5. Proper Remo icon/banner, in-app update prompt
+5. Proper Remo icon/banner (in-app update prompt is done)
 
 ## Owner's Mac test setup (adb shortcuts)
 

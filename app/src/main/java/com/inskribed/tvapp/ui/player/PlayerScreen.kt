@@ -63,6 +63,7 @@ import coil.compose.AsyncImage
 import com.inskribed.tvapp.AppViewModel
 import com.inskribed.tvapp.data.USER_AGENT
 import com.inskribed.tvapp.ui.AppColors
+import com.inskribed.tvapp.ui.formatTime
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -185,6 +186,9 @@ fun PlayerScreen(vm: AppViewModel) {
         }
         start()
     }
+
+    // Guide info for the info bar.
+    LaunchedEffect(channel.key) { vm.ensureEpg(channel) }
 
     LaunchedEffect(infoToken) {
         delay(5_000)
@@ -331,6 +335,15 @@ fun PlayerScreen(vm: AppViewModel) {
                             status.takeIf { it.isNotEmpty() },
                         ).joinToString("  ·  ")
                         Text(line, fontSize = 16.sp, color = if (failed) AppColors.Danger else AppColors.TextDim)
+                        val (nowProg, nextProg) = vm.nowAndNext(channel)
+                        if (nowProg != null || nextProg != null) {
+                            Spacer(Modifier.height(6.dp))
+                            val guide = listOfNotNull(
+                                nowProg?.let { "Now: ${it.title} (until ${formatTime(it.endMs)})" },
+                                nextProg?.let { "Next: ${it.title}" },
+                            ).joinToString("   ·   ")
+                            Text(guide, fontSize = 16.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     Text("OK pause/play   ▲▼ channel   BACK exit", fontSize = 14.sp, color = AppColors.TextDim)
                 }

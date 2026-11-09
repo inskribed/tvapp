@@ -172,7 +172,23 @@ fun SettingsScreen(vm: AppViewModel) {
         }
 
         item { SettingHeader("About") }
-        item { DimText("Version ${BuildConfig.VERSION_NAME}", Modifier.padding(start = 4.dp)) }
+        item {
+            val u = vm.update
+            SettingToggle(
+                title = "Check for updates",
+                value = when {
+                    vm.checkingUpdate -> "Checking…"
+                    u != null -> "Version ${u.versionName} available"
+                    else -> ""
+                },
+                hint = "You have version ${BuildConfig.VERSION_NAME}. Remo also checks each time it starts.",
+                onClick = { if (u != null) vm.showUpdatePrompt = true else vm.checkForUpdate(manual = true) },
+            )
+        }
+        item {
+            val status = vm.updateStatus
+            if (status != null && vm.update == null) DimText(status, Modifier.padding(start = 4.dp, top = 6.dp))
+        }
     }
 }
 
@@ -252,6 +268,47 @@ fun AddPlaylistScreen(vm: AppViewModel) {
             }
             Spacer(Modifier.height(22.dp))
             DimText("Tip: the Google TV app on your phone can act as a keyboard for this screen.")
+        }
+    }
+}
+
+@Composable
+fun UpdateScreen(vm: AppViewModel) {
+    val info = vm.update ?: return
+    val installFocus = remember { FocusRequester() }
+    androidx.activity.compose.BackHandler { vm.showUpdatePrompt = false }
+    LaunchedEffect(Unit) {
+        delay(100)
+        runCatching { installFocus.requestFocus() }
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(Modifier.width(640.dp)) {
+            ScreenTitle(
+                "Update available",
+                "Remo ${info.versionName} is ready. You have ${BuildConfig.VERSION_NAME}.",
+            )
+            if (info.notes.isNotBlank()) {
+                Text("What's new", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = AppColors.Accent)
+                Spacer(Modifier.height(6.dp))
+                Text(info.notes.take(600), fontSize = 15.sp, color = AppColors.TextDim, maxLines = 8)
+                Spacer(Modifier.height(22.dp))
+            }
+            val progress = vm.updateProgress
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvButton(
+                    if (progress != null) "Downloading… ${(progress * 100).toInt()}%" else "Install now",
+                    onClick = { vm.installUpdate() },
+                    modifier = Modifier.focusRequester(installFocus),
+                )
+                TvButton("Later", onClick = { vm.showUpdatePrompt = false })
+            }
+            val status = vm.updateStatus
+            if (status != null && progress == null) {
+                Spacer(Modifier.height(16.dp))
+                Text(status, fontSize = 15.sp, color = AppColors.Text)
+            }
+            Spacer(Modifier.height(22.dp))
+            DimText("Your playlists, favorites and settings are kept when you update.")
         }
     }
 }
