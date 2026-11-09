@@ -52,7 +52,10 @@ class Updater(private val context: Context, private val http: OkHttpClient) {
             versionCode = code,
             versionName = tag.removePrefix("v"),
             apkUrl = url,
-            notes = o.optString("body").trim(),
+            // Release notes are the commit message; drop its sign-off lines.
+            notes = o.optString("body").lines()
+                .filterNot { it.startsWith("Co-Authored-By:", ignoreCase = true) || it.startsWith("Claude-Session:") }
+                .joinToString("\n").trim(),
         )
     }
 
