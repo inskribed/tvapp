@@ -17,6 +17,10 @@ ship them as installable builds.
   or updates stop installing over the existing app.
 - After pushing, check the run at https://github.com/inskribed/tvapp/actions and fix
   any compile errors before telling the owner a build is ready.
+- **Push straight to `main`** (owner's choice, "Option A"): even when a session is
+  assigned a `claude/...` branch, put finished work on `main` so it builds, then
+  confirm the Actions run succeeded. No pull requests needed. If the app is ever
+  opened to other users, switch to PRs plus separate test vs stable releases.
 - If the owner enables wireless debugging on a box, `adb connect <ip>:5555`, then
   `adb install -r tvapp.apk` and `adb logcat` are the fastest test loop.
 
