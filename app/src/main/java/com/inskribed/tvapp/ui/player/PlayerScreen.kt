@@ -88,8 +88,9 @@ private fun buildPlayer(context: Context, http: OkHttpClient): ExoPlayer {
 
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(vm: AppViewModel) {
+fun PlayerScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
     val channel = vm.currentChannel ?: return
+    val mini = vm.playerMini
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val player = remember { buildPlayer(context, vm.http) }
@@ -195,21 +196,25 @@ fun PlayerScreen(vm: AppViewModel) {
         if (!failed && !paused) showInfo = false
     }
 
-    LaunchedEffect(Unit) {
-        runCatching { focus.requestFocus() }
+    // Full screen takes the remote; the small window leaves it to the screen behind.
+    LaunchedEffect(mini) {
+        if (!mini) {
+            runCatching { focus.requestFocus() }
+            showOverlay()
+        }
     }
 
-    BackHandler { vm.stopPlayback() }
+    BackHandler(enabled = !mini) { vm.minimizePlayer() }
 
     val upDelta = if (vm.invertKeys) 1 else -1
 
     Box(
-        Modifier
-            .fillMaxSize()
+        modifier
             .background(Color.Black)
             .focusRequester(focus)
-            .focusable()
+            .focusable(enabled = !mini)
             .onPreviewKeyEvent { e ->
+                if (mini) return@onPreviewKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
                 val isDown = e.type == KeyEventType.KeyDown
                 when (code) {
@@ -254,7 +259,7 @@ fun PlayerScreen(vm: AppViewModel) {
             },
         )
 
-        if (paused) {
+        if (paused && !mini) {
             Box(
                 Modifier
                     .align(Alignment.Center)
@@ -266,7 +271,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
         }
 
-        if (status.isNotEmpty() && !showInfo && !paused) {
+        if (status.isNotEmpty() && !showInfo && !paused && !mini) {
             Text(
                 status,
                 fontSize = 15.sp,
@@ -281,7 +286,7 @@ fun PlayerScreen(vm: AppViewModel) {
         }
 
         AnimatedVisibility(
-            visible = showInfo,
+            visible = showInfo && !mini,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -345,7 +350,7 @@ fun PlayerScreen(vm: AppViewModel) {
                             Text(guide, fontSize = 16.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    Text("OK pause/play   ▲▼ channel   BACK exit", fontSize = 14.sp, color = AppColors.TextDim)
+                    Text("OK pause/play   ▲▼ channel   BACK small window", fontSize = 14.sp, color = AppColors.TextDim)
                 }
             }
         }

@@ -14,7 +14,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.tv.material3.Icon
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
@@ -31,8 +48,17 @@ import com.inskribed.tvapp.Section
 import com.inskribed.tvapp.ui.player.PlayerScreen
 import kotlinx.coroutines.delay
 
+const val MINI_PLAYER_WIDTH = 320
+const val MINI_PLAYER_HEIGHT = 180
+private val SIDEBAR_COLLAPSED = 76.dp
+private val SIDEBAR_EXPANDED = 230.dp
+
 @Composable
 fun AppRoot(vm: AppViewModel) {
+    // Back while the small player window is showing stops it. Registered first so
+    // screens below (game detail, dialogs) handle Back before this does.
+    BackHandler(enabled = vm.currentChannel != null && vm.playerMini) { vm.stopPlayback() }
+
     Box(Modifier.fillMaxSize().background(AppColors.Bg)) {
         when {
             vm.showUpdatePrompt && vm.update != null && vm.currentChannel == null -> UpdateScreen(vm)
@@ -42,20 +68,31 @@ fun AppRoot(vm: AppViewModel) {
             else -> MainScreen(vm)
         }
         if (vm.currentChannel != null && !vm.showAddPlaylist && !vm.showTeamPicker) {
-            PlayerScreen(vm)
+            val mod = if (vm.playerMini) {
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 24.dp, end = 24.dp)
+                    .size(MINI_PLAYER_WIDTH.dp, MINI_PLAYER_HEIGHT.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            } else {
+                Modifier.fillMaxSize()
+            }
+            PlayerScreen(vm, mod)
         }
     }
 }
 
 @Composable
 private fun MainScreen(vm: AppViewModel) {
-    Row(Modifier.fillMaxSize()) {
-        Sidebar(vm)
+    val contentFocus = remember { FocusRequester() }
+    var sidebarOpen by remember { mutableStateOf(true) }
+    Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(start = 8.dp, top = 32.dp, end = 40.dp)
+                .fillMaxSize()
+                .padding(start = SIDEBAR_COLLAPSED + 28.dp, top = 32.dp, end = 40.dp)
+                .focusRequester(contentFocus)
+                .focusGroup()
         ) {
             when (vm.section) {
                 Section.LIVE -> LiveTvScreen(vm)
@@ -66,49 +103,64 @@ private fun MainScreen(vm: AppViewModel) {
                 Section.SETTINGS -> SettingsScreen(vm)
             }
         }
+        // Dim the screen behind the open menu.
+        val dim by animateFloatAsState(if (sidebarOpen) 0.55f else 0f, label = "dim")
+        if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
+        Sidebar(
+            vm,
+            open = sidebarOpen,
+            onOpenChange = { sidebarOpen = it },
+            toContent = { runCatching { contentFocus.requestFocus() } },
+        )
     }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Sidebar(vm: AppViewModel) {
-    val focusManager = LocalFocusManager.current
+private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> Unit, toContent: () -> Unit) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         delay(100)
         runCatching { firstFocus.requestFocus() }
     }
+    val width by animateDpAsState(if (open) SIDEBAR_EXPANDED else SIDEBAR_COLLAPSED, label = "sidebar")
     Column(
         Modifier
+            .onFocusChanged { onOpenChange(it.hasFocus) }
+            // Entering the menu from the right always lands on the current section.
             .focusProperties { enter = { firstFocus } }
             .focusGroup()
-            .width(220.dp)
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { toContent(); true } else false
+            }
+            .width(width)
             .fillMaxHeight()
             .background(AppColors.Panel)
-            .padding(horizontal = 14.dp, vertical = 32.dp)
+            .padding(horizontal = 10.dp, vertical = 32.dp)
     ) {
-        Text(
-            "Remo",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = AppColors.Text,
-            modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
-        )
-        Text(
-            vm.active?.name ?: "",
-            fontSize = 13.sp,
-            color = AppColors.TextDim,
-            modifier = Modifier.padding(start = 16.dp),
-        )
-        Spacer(Modifier.height(28.dp))
+        Box(Modifier.height(48.dp).padding(start = 16.dp)) {
+            if (open) {
+                Column {
+                    Text("Remo", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AppColors.Text, maxLines = 1)
+                    Text(vm.active?.name ?: "", fontSize = 13.sp, color = AppColors.TextDim, maxLines = 1)
+                }
+            } else {
+                Text("R", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AppColors.Accent)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
         Section.entries.forEach { s ->
             val mod = if (s == vm.section) Modifier.focusRequester(firstFocus) else Modifier
             TvRow(
-                onClick = { focusManager.moveFocus(FocusDirection.Right) },
+                onClick = toContent,
                 selected = vm.section == s,
                 modifier = mod.onFocusChanged { if (it.isFocused) vm.section = s },
             ) {
-                Text(s.label, fontSize = 17.sp)
+                Icon(RemoIcons.of(s), contentDescription = s.label, modifier = Modifier.size(24.dp))
+                if (open) {
+                    Spacer(Modifier.width(16.dp))
+                    Text(s.label, fontSize = 17.sp, maxLines = 1, softWrap = false)
+                }
             }
             Spacer(Modifier.height(4.dp))
         }

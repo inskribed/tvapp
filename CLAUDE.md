@@ -55,7 +55,14 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
 
 - App opens to the main screen; no forced login. No teams are pre-selected.
 - Clean dark UI inspired by Nuvio; Sports section inspired by Lume's Sports Hub.
-- Player: OK = pause/play, up/down = change channel (invertible in Settings), Back = exit.
+- Player: OK = pause/play, up/down = change channel (invertible in Settings), Back = shrink to a
+  small window (top-right, `AppViewModel.playerMini`) while browsing; Back again stops it;
+  picking a channel (or the same one) goes full screen.
+- Sidebar: line icons (`ui/Icons.kt`, hand-drawn ImageVectors — no icon library) overlaying the
+  content; collapses to icons when focus leaves it, expands when focus enters.
+- TV Guide groups: vertical list (TiviMate-style) that opens with ◀ from the channel column;
+  moving onto a group shows it, OK/▶ returns to the grid.
+- Font: Inter (static TTFs in `res/font`, applied via `LocalTextStyle` in `Theme.kt`).
 - Hold OK on a channel = toggle favorite.
 - Settings: multiple playlists, TS/HLS format, compact list, show/hide scores, my teams.
 

@@ -170,7 +170,7 @@ fun TvTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
-            textStyle = TextStyle(color = AppColors.Text, fontSize = 20.sp),
+            textStyle = TextStyle(color = AppColors.Text, fontSize = 20.sp, fontFamily = Inter),
             cursorBrush = SolidColor(AppColors.Accent),
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(

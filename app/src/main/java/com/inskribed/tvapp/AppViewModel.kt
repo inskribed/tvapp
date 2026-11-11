@@ -117,6 +117,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var playIndex by mutableStateOf(-1)
         private set
     val currentChannel: Channel? get() = playQueue.getOrNull(playIndex)
+    /** True while the player is shrunk to a small window so you can browse. */
+    var playerMini by mutableStateOf(false)
+        private set
 
     // Sports
     private val sports = SportsClient(http)
@@ -517,6 +520,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun play(queue: List<Channel>, index: Int) {
         playQueue = queue
         playIndex = index
+        playerMini = false
+    }
+
+    /** Back in the player: keep watching in a small window and return to the screen behind. */
+    fun minimizePlayer() {
+        pendingFocusKey = currentChannel?.key
+        playerMini = true
     }
 
     fun zap(delta: Int) {
@@ -528,6 +538,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         pendingFocusKey = currentChannel?.key
         playQueue = emptyList()
         playIndex = -1
+        playerMini = false
     }
 
     fun mediaItem(ch: Channel): MediaItem? {

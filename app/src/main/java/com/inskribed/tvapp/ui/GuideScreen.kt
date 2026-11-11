@@ -1,5 +1,6 @@
 package com.inskribed.tvapp.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -107,6 +108,16 @@ fun GuideScreen(vm: AppViewModel) {
     var focus by remember { mutableStateOf<GuideFocus?>(null) }
     val listState = rememberLazyListState()
 
+    // Group list (opens with ◀ from the channel column, like TiviMate).
+    var groupsOpen by remember { mutableStateOf(false) }
+    val groups = remember(vm.categories, vm.channels, vm.favorites.isEmpty()) { guideGroups(vm) }
+    fun backToGuide() {
+        groupsOpen = false
+        vm.pendingFocusKey = vm.guideChannels(vm.guideCategory).firstOrNull()?.key
+    }
+    BackHandler(enabled = groupsOpen) { backToGuide() }
+    LaunchedEffect(cat) { if (list.isNotEmpty()) listState.scrollToItem(0) }
+
     val pending = vm.pendingFocusKey
     LaunchedEffect(pending, list) {
         if (pending == null) return@LaunchedEffect
@@ -115,9 +126,17 @@ fun GuideScreen(vm: AppViewModel) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        GuideHeader(focus, now)
-        CategoryChips(vm)
-        Spacer(Modifier.height(10.dp))
+        // Leave room for the small player window in the top-right corner.
+        GuideHeader(focus, now, if (vm.playerMini && vm.currentChannel != null) MINI_PLAYER_WIDTH.dp else 0.dp)
+      Box(Modifier.fillMaxSize()) {
+       Column(Modifier.fillMaxSize()) {
+        val groupName = groups.firstOrNull { it.id == cat }?.name ?: "All channels"
+        Row(Modifier.height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(groupName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = AppColors.Text, maxLines = 1)
+            Spacer(Modifier.width(12.dp))
+            Text("${list.size} channels  ·  ◀ from a channel for groups", fontSize = 13.sp, color = AppColors.TextDim, maxLines = 1)
+        }
+        Spacer(Modifier.height(6.dp))
 
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val chWidth = if (vm.compact) 190.dp else 220.dp
@@ -156,9 +175,86 @@ fun GuideScreen(vm: AppViewModel) {
                                     offsetHours = (offsetHours + delta).coerceIn(0, MAX_OFFSET_HOURS)
                                 },
                                 onFocus = { focus = it },
+                                onOpenGroups = { groupsOpen = true },
                             )
                         }
                     }
+                }
+            }
+        }
+       }
+        if (groupsOpen) {
+            GroupsPanel(
+                groups = groups,
+                selected = cat,
+                onSelect = { vm.guideCategory = it },
+                onDone = { backToGuide() },
+                onLeave = { groupsOpen = false },
+            )
+        }
+      }
+    }
+}
+
+private class GuideGroup(val id: String, val name: String, val count: Int)
+
+private fun guideGroups(vm: AppViewModel): List<GuideGroup> {
+    val counts = vm.channels.groupingBy { it.categoryId }.eachCount()
+    return buildList {
+        if (vm.favorites.isNotEmpty()) add(GuideGroup(FAVORITES_CATEGORY, "★ Favorites", vm.favoriteChannels().size))
+        add(GuideGroup(ALL_CATEGORIES, "All channels", vm.channels.size))
+        vm.categories.forEach { c -> counts[c.id]?.let { add(GuideGroup(c.id, c.name, it)) } }
+    }
+}
+
+/** Vertical list of channel groups over the left of the guide. Moving onto a group shows it. */
+@Composable
+private fun GroupsPanel(
+    groups: List<GuideGroup>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    onDone: () -> Unit,
+    onLeave: () -> Unit,
+) {
+    val state = rememberLazyListState()
+    val selectedFocus = remember { FocusRequester() }
+    var hadFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val idx = groups.indexOfFirst { it.id == selected }
+        state.scrollToItem(maxOf(0, idx - 3))
+        delay(50)
+        runCatching { selectedFocus.requestFocus() }
+    }
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .width(300.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.Panel)
+            .onFocusChanged {
+                if (it.hasFocus) hadFocus = true
+                else if (hadFocus) onLeave() // went left to the menu
+            }
+    ) {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(groups, key = { it.id }) { g ->
+                TvRow(
+                    onClick = onDone,
+                    selected = g.id == selected,
+                    verticalPadding = 9,
+                    modifier = (if (g.id == selected) Modifier.focusRequester(selectedFocus) else Modifier)
+                        .onFocusChanged { if (it.isFocused && g.id != selected) onSelect(g.id) }
+                        .onPreviewKeyEvent { e ->
+                            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onDone(); true } else false
+                        },
+                ) {
+                    Text(g.name, modifier = Modifier.weight(1f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.width(8.dp))
+                    DimText(g.count.toString(), size = 13)
                 }
             }
         }
@@ -166,10 +262,12 @@ fun GuideScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun GuideHeader(focus: GuideFocus?, now: Long) {
-    Column(Modifier.fillMaxWidth().height(118.dp)) {
+private fun GuideHeader(focus: GuideFocus?, now: Long, reserveEnd: Dp) {
+    // With the small player showing, the header grows so the grid starts below it.
+    val height = if (reserveEnd > 0.dp) 176.dp else 118.dp
+    Column(Modifier.fillMaxWidth().height(height).padding(end = reserveEnd)) {
         if (focus == null) {
-            ScreenTitle("TV Guide", "OK to watch  ·  Hold OK to favorite  ·  ◀ ▶ to move through time")
+            ScreenTitle("TV Guide", "OK to watch  ·  Hold OK to favorite  ·  ◀ ▶ through time  ·  ◀ on a channel for groups")
             return@Column
         }
         val p = focus.program
@@ -197,45 +295,6 @@ private fun GuideHeader(focus: GuideFocus?, now: Long) {
         if (p?.description != null) {
             Spacer(Modifier.height(6.dp))
             DimText(p.description, size = 14)
-        }
-    }
-}
-
-@Composable
-private fun CategoryChips(vm: AppViewModel) {
-    val channels = vm.channels
-    val counts = remember(channels) { channels.groupingBy { it.categoryId }.eachCount() }
-    val chips = remember(vm.categories, counts, vm.favorites.isEmpty()) {
-        buildList {
-            if (vm.favorites.isNotEmpty()) add(FAVORITES_CATEGORY to "★ Favorites")
-            add(ALL_CATEGORIES to "All channels")
-            vm.categories.filter { (counts[it.id] ?: 0) > 0 }.forEach { add(it.id to it.name) }
-        }
-    }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-        items(chips, key = { it.first }) { (id, name) ->
-            val selected = vm.guideCategory == id
-            Surface(
-                onClick = { vm.guideCategory = id },
-                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = if (selected) AppColors.Card else Color.Transparent,
-                    contentColor = if (selected) AppColors.Text else AppColors.TextDim,
-                    focusedContainerColor = AppColors.Focused,
-                    focusedContentColor = AppColors.OnFocused,
-                    pressedContainerColor = AppColors.Focused,
-                    pressedContentColor = AppColors.OnFocused,
-                ),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
-            ) {
-                Text(
-                    name,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
-                    fontSize = 14.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                )
-            }
         }
     }
 }
@@ -278,6 +337,7 @@ private fun GuideRow(
     canGoBack: Boolean,
     onShift: (Int) -> Unit,
     onFocus: (GuideFocus) -> Unit,
+    onOpenGroups: () -> Unit,
 ) {
     // Wait a moment so fast scrolling doesn't request every channel along the way.
     LaunchedEffect(channel.key) {
@@ -304,6 +364,7 @@ private fun GuideRow(
             onLongClick = { vm.toggleFavorite(channel) },
             onFocus = { onFocus(GuideFocus(channel, vm.nowAndNext(channel).first)) },
             modifier = Modifier.focusRequester(channelFocus),
+            onKey = { e -> e.key == Key.DirectionLeft && run { onOpenGroups(); true } },
             background = AppColors.Panel,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
