@@ -1,6 +1,8 @@
 package com.inskribed.tvapp.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -211,6 +213,7 @@ fun TvTextField(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChannelRow(
     channel: Channel,
@@ -221,10 +224,11 @@ fun ChannelRow(
     playing: Boolean = false,
     compact: Boolean = false,
 ) {
+    var focused by remember { mutableStateOf(false) }
     TvRow(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
         verticalPadding = if (compact) 4 else 10,
     ) {
         Text(
@@ -254,10 +258,13 @@ fun ChannelRow(
         Spacer(Modifier.width(if (compact) 12.dp else 16.dp))
         Text(
             channel.name,
-            modifier = Modifier.weight(1f),
+            // The highlighted row scrolls its full name if it doesn't fit.
+            modifier = Modifier.weight(1f).then(
+                if (focused) Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 800) else Modifier
+            ),
             fontSize = if (compact) 15.sp else 18.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
             fontWeight = if (playing) FontWeight.Bold else FontWeight.Normal,
         )
         if (favorite) {
