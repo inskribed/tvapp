@@ -58,6 +58,9 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
 - Player: OK = pause/play, up/down = change channel (invertible in Settings), Back = shrink to a
   small window (top-right, `AppViewModel.playerMini`) while browsing; Back again stops it;
   picking a channel (or the same one) goes full screen.
+  While mini, a "Now playing" item at the bottom of the sidebar returns to full screen.
+- `Theme.kt` provides `LocalContentColor = AppColors.Text`; tv-material's default is black, so
+  any Text outside a Surface without its own color would otherwise render black.
 - Sidebar: line icons (`ui/Icons.kt`, hand-drawn ImageVectors — no icon library) overlaying the
   content; collapses to icons when focus leaves it, expands when focus enters.
 - TV Guide groups: vertical list (TiviMate-style) that opens with ◀ from the channel column;

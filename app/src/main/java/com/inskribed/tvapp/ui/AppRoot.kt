@@ -32,6 +32,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
@@ -163,6 +165,22 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
                 }
             }
             Spacer(Modifier.height(4.dp))
+        }
+
+        // While something plays in the small window, a shortcut back to full screen.
+        val playing = vm.currentChannel
+        if (playing != null && vm.playerMini) {
+            Spacer(Modifier.weight(1f))
+            TvRow(onClick = { vm.maximizePlayer() }, verticalPadding = 8) {
+                Icon(RemoIcons.NowPlaying, contentDescription = "Now playing", modifier = Modifier.size(24.dp))
+                if (open) {
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text("Now playing", fontSize = 12.sp, color = LocalContentColor.current.copy(alpha = 0.6f), maxLines = 1)
+                        Text(playing.name, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
         }
     }
 }

@@ -61,6 +61,11 @@ object RemoIcons {
         "M8,4 V8", "M16,10 V14", "M10,16 V20",
     )
 
+    val NowPlaying = lineIcon(
+        "NowPlaying",
+        "M8,5 L19,12 L8,19 Z",
+    )
+
     fun of(s: Section): ImageVector = when (s) {
         Section.LIVE -> LiveTv
         Section.GUIDE -> Guide

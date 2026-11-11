@@ -523,6 +523,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         playerMini = false
     }
 
+    /** Back to full screen from the small window. */
+    fun maximizePlayer() {
+        playerMini = false
+    }
+
     /** Back in the player: keep watching in a small window and return to the screen behind. */
     fun minimizePlayer() {
         pendingFocusKey = currentChannel?.key

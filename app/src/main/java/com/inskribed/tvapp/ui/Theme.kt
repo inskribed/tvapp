@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
@@ -45,6 +46,8 @@ fun TvAppTheme(content: @Composable () -> Unit) {
     ) {
         CompositionLocalProvider(
             LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = Inter),
+            // Text outside a row/button has no color of its own; without this it falls back to black.
+            LocalContentColor provides AppColors.Text,
             content = content,
         )
     }
