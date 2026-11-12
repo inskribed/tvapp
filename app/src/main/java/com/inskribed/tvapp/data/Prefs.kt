@@ -77,6 +77,10 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_ACCENT, 0)
         set(v) = sp.edit().putInt(KEY_ACCENT, v).apply()
 
+    var guideListView: Boolean
+        get() = sp.getBoolean(KEY_GUIDE_LIST, false)
+        set(v) = sp.edit().putBoolean(KEY_GUIDE_LIST, v).apply()
+
     var showScores: Boolean
         get() = sp.getBoolean(KEY_SCORES, true)
         set(v) = sp.edit().putBoolean(KEY_SCORES, v).apply()
@@ -98,6 +102,7 @@ class Prefs(context: Context) {
     private companion object {
         const val KEY_SCORES = "show_scores"
         const val KEY_ACCENT = "accent_color"
+        const val KEY_GUIDE_LIST = "guide_list_view"
         const val KEY_TEAMS = "favorite_teams"
         const val KEY_COMPACT = "compact_list"
         const val KEY_PLAYLISTS = "playlists"

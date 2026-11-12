@@ -106,7 +106,6 @@ private fun MainScreen(vm: AppViewModel) {
                 .focusGroup()
         ) {
             when (vm.section) {
-                Section.LIVE -> LiveTvScreen(vm)
                 Section.GUIDE -> GuideScreen(vm)
                 Section.SPORTS -> SportsScreen(vm)
                 Section.FAVORITES -> FavoritesScreen(vm)

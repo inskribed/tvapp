@@ -1,7 +1,9 @@
 package com.inskribed.tvapp.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -131,14 +133,50 @@ fun GuideScreen(vm: AppViewModel) {
       Box(Modifier.fillMaxSize()) {
        Column(Modifier.fillMaxSize()) {
         val groupName = groups.firstOrNull { it.id == cat }?.name ?: "All channels"
-        Row(Modifier.height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(groupName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = AppColors.Text, maxLines = 1)
             Spacer(Modifier.width(12.dp))
-            Text("${list.size} channels  ·  ◀ from a channel for groups", fontSize = 13.sp, color = AppColors.TextDim, maxLines = 1)
+            Text(
+                "${list.size} channels  ·  ◀ from a channel for groups",
+                modifier = Modifier.weight(1f),
+                fontSize = 13.sp,
+                color = AppColors.TextDim,
+                maxLines = 1,
+            )
+            // Switch between the time grid and a simple list. Also in Settings → Appearance.
+            TvButton(
+                if (vm.guideList) "Grid view" else "List view",
+                onClick = { vm.updateGuideList(!vm.guideList) },
+            )
         }
         Spacer(Modifier.height(6.dp))
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (vm.guideList) {
+            if (list.isEmpty()) {
+                DimText(
+                    if (cat == FAVORITES_CATEGORY) "No favorites yet. Hold OK on a channel to add one." else "No channels here.",
+                    Modifier.padding(top = 16.dp),
+                )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (vm.compact) 0.dp else 2.dp),
+                ) {
+                    itemsIndexed(list, key = { _, c -> c.key }) { index, ch ->
+                        GuideListRow(
+                            vm = vm,
+                            channel = ch,
+                            now = now,
+                            onPlay = { vm.play(list, index) },
+                            onFocus = { focus = it },
+                            onOpenGroups = { groupsOpen = true },
+                        )
+                    }
+                }
+            }
+        } else BoxWithConstraints(Modifier.fillMaxSize()) {
             val chWidth = if (vm.compact) 190.dp else 220.dp
             val timeline = maxWidth - chWidth
             val rowHeight = if (vm.compact) 46.dp else 58.dp
@@ -193,6 +231,117 @@ fun GuideScreen(vm: AppViewModel) {
             )
         }
       }
+    }
+}
+
+/** List view: one big row per channel, with what's on now and how far into it we are. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GuideListRow(
+    vm: AppViewModel,
+    channel: Channel,
+    now: Long,
+    onPlay: () -> Unit,
+    onFocus: (GuideFocus) -> Unit,
+    onOpenGroups: () -> Unit,
+) {
+    LaunchedEffect(channel.key) {
+        delay(250)
+        vm.ensureEpg(channel)
+    }
+    val fr = remember { FocusRequester() }
+    if (channel.key == vm.pendingFocusKey) {
+        LaunchedEffect(Unit) {
+            delay(80)
+            runCatching { fr.requestFocus() }
+            vm.pendingFocusKey = null
+        }
+    }
+    var focused by remember { mutableStateOf(false) }
+    val (onNow, next) = vm.nowAndNext(channel)
+    val compact = vm.compact
+    TvRow(
+        onClick = onPlay,
+        onLongClick = { vm.toggleFavorite(channel) },
+        verticalPadding = if (compact) 4 else 9,
+        modifier = Modifier
+            .focusRequester(fr)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus(GuideFocus(channel, onNow))
+            }
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onOpenGroups(); true } else false
+            },
+    ) {
+        Text(
+            channel.num.toString(),
+            modifier = Modifier.width(if (compact) 48.dp else 56.dp),
+            fontSize = if (compact) 13.sp else 15.sp,
+            color = LocalContentColor.current.copy(alpha = 0.55f),
+        )
+        Box(
+            Modifier
+                .size(width = if (compact) 44.dp else 64.dp, height = if (compact) 26.dp else 40.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0x22FFFFFF)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (channel.logo != null) {
+                AsyncImage(
+                    model = channel.logo,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.padding(if (compact) 2.dp else 4.dp),
+                )
+            } else {
+                Text(channel.name.take(2).uppercase(), fontSize = if (compact) 10.sp else 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.width(if (compact) 12.dp else 16.dp))
+        Text(
+            channel.name,
+            modifier = Modifier.weight(1f).then(
+                if (focused) Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 800) else Modifier
+            ),
+            fontSize = if (compact) 15.sp else 18.sp,
+            maxLines = 1,
+            overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+        )
+        if (vm.isFavorite(channel)) {
+            Spacer(Modifier.width(8.dp))
+            Text("★", fontSize = 16.sp, color = AppColors.Star)
+        }
+        Spacer(Modifier.width(20.dp))
+        // What's on now, with a thin progress bar.
+        Column(Modifier.width(if (compact) 260.dp else 300.dp)) {
+            if (onNow != null) {
+                Text(onNow.title, fontSize = if (compact) 13.sp else 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!compact) {
+                    Spacer(Modifier.height(4.dp))
+                    val total = (onNow.endMs - onNow.startMs).coerceAtLeast(1)
+                    val done = ((now - onNow.startMs).toFloat() / total).coerceIn(0f, 1f)
+                    Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
+                        Box(Modifier.fillMaxWidth(done).fillMaxHeight().background(AppColors.Accent))
+                    }
+                    Spacer(Modifier.height(3.dp))
+                    DimText(
+                        listOfNotNull("until ${formatTime(onNow.endMs)}", next?.let { "Next: ${it.title}" }).joinToString("  ·  "),
+                        size = 12,
+                    )
+                }
+            } else {
+                val e = vm.epg[channel.key]
+                DimText(
+                    when {
+                        channel.epgId.isNullOrBlank() -> "No guide info"
+                        e == null -> "Loading…"
+                        else -> "No guide info right now"
+                    },
+                    size = 13,
+                )
+            }
+        }
     }
 }
 

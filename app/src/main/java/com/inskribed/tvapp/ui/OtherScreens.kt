@@ -154,6 +154,14 @@ fun SettingsScreen(vm: AppViewModel) {
         item { AccentPicker(vm) }
         item {
             SettingToggle(
+                title = "TV Guide layout",
+                value = if (vm.guideList) "List" else "Grid",
+                hint = "Grid shows shows over time. List shows bigger channel rows with what's on now.",
+                onClick = { vm.updateGuideList(!vm.guideList) },
+            )
+        }
+        item {
+            SettingToggle(
                 title = "Channel list size",
                 value = if (vm.compact) "Compact" else "Comfortable",
                 hint = "Compact fits more channels on screen.",

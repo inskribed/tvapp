@@ -43,7 +43,6 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 enum class Section(val label: String) {
-    LIVE("Live TV"),
     GUIDE("TV Guide"),
     SPORTS("Sports"),
     FAVORITES("Favorites"),
@@ -99,8 +98,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     // Navigation
-    var section by mutableStateOf(Section.LIVE)
-    var selectedCategory by mutableStateOf(ALL_CATEGORIES)
+    var section by mutableStateOf(Section.GUIDE)
     var searchQuery by mutableStateOf("")
 
     // Settings
@@ -111,8 +109,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var compact by mutableStateOf(prefs.compactList)
         private set
 
-    /** Text filter for the Live TV channel list. */
-    var liveFilter by mutableStateOf("")
+    /** TV Guide shows a simple channel list (with what's on now) instead of the time grid. */
+    var guideList by mutableStateOf(prefs.guideListView)
+        private set
 
     // Playback
     var playQueue by mutableStateOf<List<Channel>>(emptyList())
@@ -221,7 +220,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         categories = emptyList()
         channels = emptyList()
         account = null
-        selectedCategory = ALL_CATEGORIES
         epg.clear()
         loadActive()
     }
@@ -498,6 +496,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun updateAccent(c: Color) {
         AppColors.setAccent(c)
         prefs.accentColor = c.toArgb()
+    }
+
+    fun updateGuideList(value: Boolean) {
+        guideList = value
+        prefs.guideListView = value
     }
 
     fun updateStreamFormat(format: String) {

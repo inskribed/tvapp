@@ -44,16 +44,18 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
   `tvapp.apk` to cache, installs via FileProvider (`${applicationId}.files`).
 - `data/Sports.kt` — ESPN public scoreboard/teams (`site.api.espn.com`) and
   `ChannelMatcher` (matches games to channels by network aliases and team names).
-- `ui/` — `AppRoot` (screen switching + sidebar), `LiveTvScreen`, `GuideScreen` (EPG grid:
+- `ui/` — `AppRoot` (screen switching + sidebar), `GuideScreen` (EPG grid:
   2-hour window, ◀▶ at the edge shifts time, per-channel `get_short_epg` fetched lazily for
-  visible rows, max 4 at once, cached 30 min in `AppViewModel.epg`), `SportsScreen`
+  visible rows, max 4 at once, cached 30 min in `AppViewModel.epg`; or List view —
+  `GuideListRow`, big channel rows with now-playing + progress, `vm.guideList`), `SportsScreen`
   (game rows, game detail, team picker), `OtherScreens` (Favorites, Search, Settings,
   Add playlist), `Components` (TvRow, TvButton, TvTextField, ChannelList),
   `player/PlayerScreen` (ExoPlayer, reconnect, channel up/down, pause).
 
 ## Product decisions already made
 
-- App opens to the main screen; no forced login. No teams are pre-selected.
+- App opens to the TV Guide (the old Live TV list section was removed; the guide's List view
+  replaces it). No forced login. No teams are pre-selected.
 - Clean dark UI inspired by Nuvio; Sports section inspired by Lume's Sports Hub.
 - Player: OK = pause/play, up/down = change channel (invertible in Settings), Back = shrink to a
   small window (top-right, `AppViewModel.playerMini`) while browsing; Back again stops it;

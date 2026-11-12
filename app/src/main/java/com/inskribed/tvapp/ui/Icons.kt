@@ -67,7 +67,6 @@ object RemoIcons {
     )
 
     fun of(s: Section): ImageVector = when (s) {
-        Section.LIVE -> LiveTv
         Section.GUIDE -> Guide
         Section.SPORTS -> Sports
         Section.FAVORITES -> Favorites
