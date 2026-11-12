@@ -1,6 +1,7 @@
 package com.inskribed.tvapp.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -38,6 +39,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.compositeOver
+import androidx.tv.material3.Border
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -64,7 +69,40 @@ import com.inskribed.tvapp.AppViewModel
 import com.inskribed.tvapp.data.Channel
 import kotlinx.coroutines.delay
 
-/** A focusable row: transparent at rest, bright white when focused. */
+private const val GLASS_FILL = 0.20f
+private const val GLASS_PRESSED = 0.32f
+
+/**
+ * The app's highlight ("glass"): the user's accent color as a translucent tint over [base],
+ * with light text. Pair with [glassBorder] and [glassSheen].
+ */
+@Composable
+fun glassColors(
+    base: Color,
+    content: Color = AppColors.Text,
+    accent: Color = AppColors.Accent,
+) = ClickableSurfaceDefaults.colors(
+    containerColor = base,
+    contentColor = content,
+    focusedContainerColor = accent.copy(alpha = GLASS_FILL).compositeOver(base),
+    focusedContentColor = if (content == AppColors.Danger) content else AppColors.Text,
+    pressedContainerColor = accent.copy(alpha = GLASS_PRESSED).compositeOver(base),
+    pressedContentColor = AppColors.Text,
+)
+
+/** 2px accent outline while highlighted. */
+@Composable
+fun glassBorder(shape: Shape, accent: Color = AppColors.Accent) = ClickableSurfaceDefaults.border(
+    focusedBorder = Border(BorderStroke(2.dp, accent), shape = shape),
+    pressedBorder = Border(BorderStroke(2.dp, accent), shape = shape),
+)
+
+/** Soft light sheen across the top of a highlighted item, for the glass look. */
+fun Modifier.glassSheen(focused: Boolean, shape: Shape): Modifier =
+    if (!focused) this
+    else background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent)), shape)
+
+/** A focusable row: transparent at rest, accent glass when focused. */
 @Composable
 fun TvRow(
     onClick: () -> Unit,
@@ -74,23 +112,22 @@ fun TvRow(
     verticalPadding: Int = 10,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(10.dp)
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) AppColors.Card else Color.Transparent,
-            contentColor = AppColors.Text,
-            focusedContainerColor = AppColors.Focused,
-            focusedContentColor = AppColors.OnFocused,
-            pressedContainerColor = AppColors.Focused,
-            pressedContentColor = AppColors.OnFocused,
-        ),
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(shape),
+        colors = glassColors(if (selected) AppColors.Card else Color.Transparent),
+        border = glassBorder(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = verticalPadding.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .glassSheen(focused, shape)
+                .padding(horizontal = 16.dp, vertical = verticalPadding.dp),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
@@ -99,23 +136,20 @@ fun TvRow(
 
 @Composable
 fun TvButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, danger: Boolean = false) {
+    val shape = RoundedCornerShape(percent = 50)
+    val accent = if (danger) AppColors.Danger else AppColors.Accent
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier,
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(24.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = AppColors.Card,
-            contentColor = if (danger) AppColors.Danger else AppColors.Text,
-            focusedContainerColor = if (danger) AppColors.Danger else AppColors.Focused,
-            focusedContentColor = AppColors.OnFocused,
-            pressedContainerColor = AppColors.Focused,
-            pressedContentColor = AppColors.OnFocused,
-        ),
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(shape),
+        colors = glassColors(AppColors.Card, content = if (danger) AppColors.Danger else AppColors.Text, accent = accent),
+        border = glassBorder(shape, accent),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
     ) {
         Text(
             text,
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+            modifier = Modifier.glassSheen(focused, shape).padding(horizontal = 22.dp, vertical = 10.dp),
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
         )

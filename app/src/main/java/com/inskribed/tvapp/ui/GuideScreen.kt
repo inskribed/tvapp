@@ -476,6 +476,8 @@ private fun GuideCell(
     onKey: (KeyEvent) -> Boolean = { false },
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(6.dp)
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -483,21 +485,18 @@ private fun GuideCell(
             .width(width)
             .fillMaxHeight()
             .padding(2.dp)
-            .onFocusChanged { if (it.isFocused) onFocus() }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
             .onPreviewKeyEvent { e -> e.type == KeyEventType.KeyDown && onKey(e) },
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = background,
-            contentColor = AppColors.Text,
-            focusedContainerColor = AppColors.Focused,
-            focusedContentColor = AppColors.OnFocused,
-            pressedContainerColor = AppColors.Focused,
-            pressedContentColor = AppColors.OnFocused,
-        ),
+        shape = ClickableSurfaceDefaults.shape(shape),
+        colors = glassColors(background),
+        border = glassBorder(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 10.dp),
+            Modifier.fillMaxSize().glassSheen(focused, shape).padding(horizontal = 10.dp),
             verticalArrangement = Arrangement.Center,
             content = content,
         )

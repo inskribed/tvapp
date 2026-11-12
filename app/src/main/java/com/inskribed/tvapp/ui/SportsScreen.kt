@@ -153,26 +153,20 @@ private fun GameRow(title: String, games: List<Game>, vm: AppViewModel) {
     }
 }
 
-@Composable
-private fun cardColors() = ClickableSurfaceDefaults.colors(
-    containerColor = AppColors.Card,
-    contentColor = AppColors.Text,
-    focusedContainerColor = AppColors.Focused,
-    focusedContentColor = AppColors.OnFocused,
-    pressedContainerColor = AppColors.Focused,
-    pressedContentColor = AppColors.OnFocused,
-)
+private val CardShape = RoundedCornerShape(14.dp)
 
 @Composable
 private fun PromptCard(title: String, body: String, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = Modifier.width(420.dp).height(120.dp),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-        colors = cardColors(),
+        modifier = Modifier.width(420.dp).height(120.dp).onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(CardShape),
+        colors = glassColors(AppColors.Card),
+        border = glassBorder(CardShape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
-        Column(Modifier.padding(18.dp)) {
+        Column(Modifier.fillMaxSize().glassSheen(focused, CardShape).padding(18.dp)) {
             Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             DimText(body)
@@ -184,14 +178,16 @@ private fun PromptCard(title: String, body: String, onClick: () -> Unit) {
 private fun GameCard(game: Game, vm: AppViewModel) {
     val matches = remember(game, vm.channels) { vm.matchesFor(game) }
     val showScore = vm.showScores && game.state != GameState.PRE
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = { vm.gameDetail = game },
-        modifier = Modifier.width(300.dp).height(160.dp),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-        colors = cardColors(),
+        modifier = Modifier.width(300.dp).height(160.dp).onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(CardShape),
+        colors = glassColors(AppColors.Card),
+        border = glassBorder(CardShape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
     ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(Modifier.fillMaxSize().glassSheen(focused, CardShape).padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 DimText(game.league.label, size = 12)
                 Spacer(Modifier.weight(1f))

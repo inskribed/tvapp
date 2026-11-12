@@ -69,7 +69,8 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
   saved in Prefs). `AppColors.Accent` is state-backed, so reading it recomposes on change. Used
   tastefully: sidebar highlight (glass pill: 2dp accent border, ~16% accent fill, light top
   sheen), current-section icon, settings headers, text-field focus, guide accents, mini-player
-  border. Main list/button focus stays solid white for TV readability.
+  border. All focusable items share the glass highlight via `glassColors` / `glassBorder` /
+  `glassSheen` in `Components.kt` (TvRow, TvButton, game cards, guide cells); no more solid white.
 - Font: Inter (static TTFs in `res/font`, applied via `LocalTextStyle` in `Theme.kt`).
 - Hold OK on a channel = toggle favorite.
 - Settings: multiple playlists, TS/HLS format, compact list, show/hide scores, my teams.
