@@ -146,7 +146,7 @@ private fun GameRow(title: String, games: List<Game>, vm: AppViewModel) {
     SectionBlock(title) {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp),
+            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp),
         ) {
             items(games, key = { it.league.name + it.id }) { g -> GameCard(g, vm) }
         }
@@ -160,7 +160,7 @@ private fun PromptCard(title: String, body: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = Modifier.width(420.dp).height(120.dp).onFocusChanged { focused = it.isFocused },
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).width(420.dp).height(120.dp).onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(CardShape),
         colors = glassColors(AppColors.Card),
         border = glassBorder(CardShape),

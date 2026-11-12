@@ -121,7 +121,7 @@ fun TvRow(
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = glassColors(if (selected) AppColors.Card else Color.Transparent),
         border = glassBorder(shape),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         Row(
             modifier = Modifier
