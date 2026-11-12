@@ -5,7 +5,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.AndroidViewModel
+import com.inskribed.tvapp.ui.AppColors
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -170,6 +173,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var loadJob: Job? = null
 
     init {
+        prefs.accentColor.takeIf { it != 0 }?.let { AppColors.setAccent(Color(it)) }
         loadActive()
         checkForUpdate(manual = false)
     }
@@ -490,6 +494,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- Settings --------------------------------------------------------
+
+    fun updateAccent(c: Color) {
+        AppColors.setAccent(c)
+        prefs.accentColor = c.toArgb()
+    }
 
     fun updateStreamFormat(format: String) {
         streamFormat = format

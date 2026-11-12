@@ -32,6 +32,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.tv.material3.Icon
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.graphics.Brush
+import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Surface
 import androidx.tv.material3.LocalContentColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -76,6 +84,7 @@ fun AppRoot(vm: AppViewModel) {
                     .padding(top = 24.dp, end = 24.dp)
                     .size(MINI_PLAYER_WIDTH.dp, MINI_PLAYER_HEIGHT.dp)
                     .clip(RoundedCornerShape(12.dp))
+                    .border(2.dp, AppColors.Accent.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
             } else {
                 Modifier.fillMaxSize()
             }
@@ -153,12 +162,18 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
         Spacer(Modifier.height(20.dp))
         Section.entries.forEach { s ->
             val mod = if (s == vm.section) Modifier.focusRequester(firstFocus) else Modifier
-            TvRow(
+            SidebarItem(
                 onClick = toContent,
                 selected = vm.section == s,
                 modifier = mod.onFocusChanged { if (it.isFocused) vm.section = s },
-            ) {
-                Icon(RemoIcons.of(s), contentDescription = s.label, modifier = Modifier.size(24.dp))
+            ) { focused ->
+                Icon(
+                    RemoIcons.of(s),
+                    contentDescription = s.label,
+                    // The current section's icon carries the accent so you can tell where you are when collapsed.
+                    tint = if (vm.section == s && !focused) AppColors.Accent else LocalContentColor.current,
+                    modifier = Modifier.size(24.dp),
+                )
                 if (open) {
                     Spacer(Modifier.width(16.dp))
                     Text(s.label, fontSize = 17.sp, maxLines = 1, softWrap = false)
@@ -171,7 +186,7 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
         val playing = vm.currentChannel
         if (playing != null && vm.playerMini) {
             Spacer(Modifier.weight(1f))
-            TvRow(onClick = { vm.maximizePlayer() }, verticalPadding = 8) {
+            SidebarItem(onClick = { vm.maximizePlayer() }, selected = false) {
                 Icon(RemoIcons.NowPlaying, contentDescription = "Now playing", modifier = Modifier.size(24.dp))
                 if (open) {
                     Spacer(Modifier.width(16.dp))
@@ -182,5 +197,52 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
                 }
             }
         }
+    }
+}
+
+/**
+ * Side menu item. Highlighted = a pill with a 2px accent border over a faint, glassy
+ * tint of the accent (translucent fill plus a soft light sheen at the top).
+ */
+@Composable
+private fun SidebarItem(
+    onClick: () -> Unit,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.(focused: Boolean) -> Unit,
+) {
+    val pill = RoundedCornerShape(percent = 50)
+    val accent = AppColors.Accent
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(pill),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) AppColors.Card else Color.Transparent,
+            contentColor = AppColors.Text,
+            focusedContainerColor = accent.copy(alpha = 0.16f),
+            focusedContentColor = AppColors.Text,
+            pressedContainerColor = accent.copy(alpha = 0.28f),
+            pressedContentColor = AppColors.Text,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, accent), shape = pill),
+            pressedBorder = Border(BorderStroke(2.dp, accent), shape = pill),
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (focused) Modifier.background(
+                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.Transparent)),
+                        pill,
+                    ) else Modifier
+                )
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) { content(focused) }
     }
 }

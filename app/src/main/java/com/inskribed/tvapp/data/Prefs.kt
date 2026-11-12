@@ -72,6 +72,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_COMPACT, false)
         set(v) = sp.edit().putBoolean(KEY_COMPACT, v).apply()
 
+    /** ARGB; 0 = not chosen yet. */
+    var accentColor: Int
+        get() = sp.getInt(KEY_ACCENT, 0)
+        set(v) = sp.edit().putInt(KEY_ACCENT, v).apply()
+
     var showScores: Boolean
         get() = sp.getBoolean(KEY_SCORES, true)
         set(v) = sp.edit().putBoolean(KEY_SCORES, v).apply()
@@ -92,6 +97,7 @@ class Prefs(context: Context) {
 
     private companion object {
         const val KEY_SCORES = "show_scores"
+        const val KEY_ACCENT = "accent_color"
         const val KEY_TEAMS = "favorite_teams"
         const val KEY_COMPACT = "compact_list"
         const val KEY_PLAYLISTS = "playlists"

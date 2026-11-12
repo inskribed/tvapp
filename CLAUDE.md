@@ -65,6 +65,11 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
   content; collapses to icons when focus leaves it, expands when focus enters.
 - TV Guide groups: vertical list (TiviMate-style) that opens with ◀ from the channel column;
   moving onto a group shows it, OK/▶ returns to the grid.
+- Accent color is user-chosen (Settings → Appearance, presets in `Theme.kt` `AccentPresets`,
+  saved in Prefs). `AppColors.Accent` is state-backed, so reading it recomposes on change. Used
+  tastefully: sidebar highlight (glass pill: 2dp accent border, ~16% accent fill, light top
+  sheen), current-section icon, settings headers, text-field focus, guide accents, mini-player
+  border. Main list/button focus stays solid white for TV readability.
 - Font: Inter (static TTFs in `res/font`, applied via `LocalTextStyle` in `Theme.kt`).
 - Hold OK on a channel = toggle favorite.
 - Settings: multiple playlists, TS/HLS format, compact list, show/hide scores, my teams.

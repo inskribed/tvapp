@@ -29,6 +29,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.inskribed.tvapp.AppViewModel
 import com.inskribed.tvapp.BuildConfig
@@ -144,6 +151,7 @@ fun SettingsScreen(vm: AppViewModel) {
         }
 
         item { SettingHeader("Appearance") }
+        item { AccentPicker(vm) }
         item {
             SettingToggle(
                 title = "Channel list size",
@@ -309,6 +317,49 @@ fun UpdateScreen(vm: AppViewModel) {
             }
             Spacer(Modifier.height(22.dp))
             DimText("Your playlists, favorites and settings are kept when you update.")
+        }
+    }
+}
+
+/** Row of color swatches. The chosen color tints the menu highlight and other small touches. */
+@Composable
+private fun AccentPicker(vm: AppViewModel) {
+    var focusedName by remember { mutableStateOf<String?>(null) }
+    val current = AccentPresets.firstOrNull { it.color == AppColors.Accent }
+    Column(Modifier.padding(start = 16.dp, top = 6.dp, bottom = 10.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("Accent color", fontSize = 17.sp)
+            Spacer(Modifier.width(12.dp))
+            Text(focusedName ?: current?.name ?: "", fontSize = 15.sp, color = AppColors.Accent, fontWeight = FontWeight.Medium)
+        }
+        DimText("Used for the menu highlight and other small touches.", size = 13)
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            AccentPresets.forEach { p ->
+                val selected = p.color == AppColors.Accent
+                Surface(
+                    onClick = { vm.updateAccent(p.color) },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .onFocusChanged { if (it.isFocused) focusedName = p.name else if (focusedName == p.name) focusedName = null },
+                    shape = ClickableSurfaceDefaults.shape(CircleShape),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = p.color,
+                        focusedContainerColor = p.color,
+                        pressedContainerColor = p.color,
+                    ),
+                    border = ClickableSurfaceDefaults.border(
+                        focusedBorder = Border(BorderStroke(3.dp, AppColors.Text), shape = CircleShape),
+                    ),
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.15f),
+                ) {
+                    if (selected) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("✓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AppColors.Bg)
+                        }
+                    }
+                }
+            }
         }
     }
 }
