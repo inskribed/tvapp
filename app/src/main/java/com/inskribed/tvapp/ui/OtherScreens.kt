@@ -197,7 +197,7 @@ fun SettingsScreen(vm: AppViewModel) {
                     u != null -> "Version ${u.versionName} available"
                     else -> ""
                 },
-                hint = "You have version ${BuildConfig.VERSION_NAME}. Remo also checks each time it starts.",
+                hint = "You have version ${BuildConfig.VERSION_NAME}. Orka also checks each time it starts.",
                 onClick = { if (u != null) vm.showUpdatePrompt = true else vm.checkForUpdate(manual = true) },
             )
         }
@@ -301,7 +301,7 @@ fun UpdateScreen(vm: AppViewModel) {
         Column(Modifier.width(640.dp)) {
             ScreenTitle(
                 "Update available",
-                "Remo ${info.versionName} is ready. You have ${BuildConfig.VERSION_NAME}.",
+                "Orka ${info.versionName} is ready. You have ${BuildConfig.VERSION_NAME}.",
             )
             if (info.notes.isNotBlank()) {
                 Text("What's new", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = AppColors.Accent)

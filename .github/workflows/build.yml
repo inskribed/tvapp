@@ -37,7 +37,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
-          name: Remo 0.1.${{ github.run_number }}
+          name: Orka 0.1.${{ github.run_number }}
           body: ${{ github.event.head_commit.message }}
           files: tvapp.apk
           make_latest: true

@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -322,7 +323,7 @@ private fun GuideListRow(
                     val total = (onNow.endMs - onNow.startMs).coerceAtLeast(1)
                     val done = ((now - onNow.startMs).toFloat() / total).coerceIn(0f, 1f)
                     Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
-                        Box(Modifier.fillMaxWidth(done).fillMaxHeight().background(AppColors.Accent))
+                        Box(Modifier.fillMaxWidth(done).fillMaxHeight().background(Brush.horizontalGradient(listOf(AppColors.Accent, AppColors.Highlight))))
                     }
                     Spacer(Modifier.height(3.dp))
                     DimText(
@@ -455,7 +456,7 @@ private fun TimeRuler(windowStart: Long, chWidth: Dp, widthOf: (Long) -> Dp, off
             if (offsetHours == 0) "Now" else "+${offsetHours}h",
             modifier = Modifier.width(chWidth).padding(start = 12.dp),
             fontSize = 13.sp,
-            color = AppColors.Accent,
+            color = AppColors.Highlight,
             fontWeight = FontWeight.SemiBold,
         )
         Box(Modifier.weight(1f)) {

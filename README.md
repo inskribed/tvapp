@@ -1,4 +1,4 @@
-# Remo
+# Orka
 
 A personal IPTV player for Android TV / Google TV (Nvidia Shield, onn 4K Plus).
 
@@ -14,8 +14,8 @@ A personal IPTV player for Android TV / Google TV (Nvidia Shield, onn 4K Plus).
 ## Using it
 
 - **First launch:** enter your Xtream Codes server URL, username and password.
-- **Live TV:** pick a category on the left, then a channel. **Hold OK** on a channel to add or remove a favorite.
-- **In the player:** up/down changes channel, OK shows channel info, Back returns to the list.
+- **TV Guide:** the main screen. Press left on a channel for groups; **Hold OK** on a channel to add or remove a favorite. Switch between Grid and List view at the top.
+- **In the player:** up/down changes channel, OK shows channel info, Back shrinks it to a small window; Back again stops it.
 - **Settings:** add more playlists, switch between them, change stream format (TS/HLS) if a channel won't play.
 
 ## How builds work
@@ -27,8 +27,8 @@ The signing key in `signing/` is password-protected; the password lives only in 
 ## Roadmap
 
 - [x] Xtream login, multiple playlists, Live TV, favorites, search, channel up/down
-- [ ] TV guide grid (EPG)
-- [ ] Sports: favorite teams, live games, matched channels, hide/show scores
+- [x] TV guide grid (EPG), in-app updates
+- [x] Sports: favorite teams, live games, matched channels, hide/show scores
 - [ ] Program search
 - [ ] Multi-view
 - [ ] Recording to USB drive

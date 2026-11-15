@@ -98,7 +98,7 @@ class Updater(private val context: Context, private val http: OkHttpClient) {
     /** Android asks once per app before it may install updates ("unknown sources"). */
     fun canInstall(): Boolean = context.packageManager.canRequestPackageInstalls()
 
-    /** Opens the system screen where Remo can be allowed to install apps. False if the TV has no such screen. */
+    /** Opens the system screen where Orka can be allowed to install apps. False if the TV has no such screen. */
     fun openInstallPermission(): Boolean = try {
         context.startActivity(
             Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))

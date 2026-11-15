@@ -15,6 +15,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.inskribed.tvapp.R
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.focusGroup
@@ -148,14 +151,14 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
             .background(AppColors.Panel)
             .padding(horizontal = 10.dp, vertical = 32.dp)
     ) {
-        Box(Modifier.height(48.dp).padding(start = 16.dp)) {
+        Row(Modifier.height(48.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.orka_mark), contentDescription = "Orka", modifier = Modifier.size(width = 30.dp, height = 34.dp))
             if (open) {
+                Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Remo", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AppColors.Text, maxLines = 1)
-                    Text(vm.active?.name ?: "", fontSize = 13.sp, color = AppColors.TextDim, maxLines = 1)
+                    Text("Orka", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AppColors.Text, maxLines = 1)
+                    Text(vm.active?.name ?: "", fontSize = 12.sp, color = AppColors.TextDim, maxLines = 1)
                 }
-            } else {
-                Text("R", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AppColors.Accent)
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -167,7 +170,7 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
                 modifier = mod.onFocusChanged { if (it.isFocused) vm.section = s },
             ) { focused ->
                 Icon(
-                    RemoIcons.of(s),
+                    OrkaIcons.of(s),
                     contentDescription = s.label,
                     // The current section's icon carries the accent so you can tell where you are when collapsed.
                     tint = if (vm.section == s && !focused) AppColors.Accent else LocalContentColor.current,
@@ -186,7 +189,7 @@ private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> 
         if (playing != null && vm.playerMini) {
             Spacer(Modifier.weight(1f))
             SidebarItem(onClick = { vm.maximizePlayer() }, selected = false) {
-                Icon(RemoIcons.NowPlaying, contentDescription = "Now playing", modifier = Modifier.size(24.dp))
+                Icon(OrkaIcons.NowPlaying, contentDescription = "Now playing", tint = AppColors.Highlight, modifier = Modifier.size(24.dp))
                 if (open) {
                     Spacer(Modifier.width(16.dp))
                     Column {

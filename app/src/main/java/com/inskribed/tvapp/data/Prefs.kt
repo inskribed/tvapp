@@ -101,7 +101,7 @@ class Prefs(context: Context) {
 
     private companion object {
         const val KEY_SCORES = "show_scores"
-        const val KEY_ACCENT = "accent_color"
+        const val KEY_ACCENT = "accent_color_v2" // v2: the Orka teal became the default; older choices reset
         const val KEY_GUIDE_LIST = "guide_list_view"
         const val KEY_TEAMS = "favorite_teams"
         const val KEY_COMPACT = "compact_list"

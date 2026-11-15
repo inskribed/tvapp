@@ -432,9 +432,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (updateJob?.isActive == true) return
         if (!updater.canInstall()) {
             updateStatus = if (updater.openInstallPermission()) {
-                "First, allow Remo to install updates: turn Remo on in the screen that opened, press Back, then choose Install again."
+                "First, allow Orka to install updates: turn Orka on in the screen that opened, press Back, then choose Install again."
             } else {
-                "First, allow Remo to install updates: Settings → Apps (or Device Preferences) → Security & restrictions → Unknown sources → turn on Remo. Then choose Install again."
+                "First, allow Orka to install updates: Settings → Apps (or Device Preferences) → Security & restrictions → Unknown sources → turn on Orka. Then choose Install again."
             }
             return
         }

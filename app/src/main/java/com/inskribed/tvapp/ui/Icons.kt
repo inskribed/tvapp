@@ -24,7 +24,7 @@ private fun lineIcon(name: String, vararg paths: String): ImageVector {
     return b.build()
 }
 
-object RemoIcons {
+object OrkaIcons {
     val LiveTv = lineIcon(
         "LiveTv",
         "M4,7 H20 A2,2 0 0 1 22,9 V18 A2,2 0 0 1 20,20 H4 A2,2 0 0 1 2,18 V9 A2,2 0 0 1 4,7 Z",

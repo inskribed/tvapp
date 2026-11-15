@@ -318,7 +318,7 @@ fun GameDetailScreen(vm: AppViewModel) {
         Column(Modifier.weight(1f)) {
             ScreenTitle("Watch on", if (matches.isEmpty()) null else "Best matches from your playlist")
             if (matches.isEmpty()) {
-                DimText("Remo couldn't find a channel carrying this game. Try searching your channels:")
+                DimText("Orka couldn't find a channel carrying this game. Try searching your channels:")
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TvButton(game.away.team.nickname, onClick = { vm.openSearch(game.away.team.nickname) })
