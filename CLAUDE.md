@@ -70,6 +70,13 @@ ignores `ios/**` and `design/**`.
   committed). `AppModel` = all state (@Observable), `PlayerModel` = AVPlayer (HLS only — AVPlayer
   can't play raw .ts; retry/backoff like Android; PiP via AVPlayerLayer; audio continues in the
   mini player bar), `Store` (UserDefaults; playlist logins in Keychain). Views in `Views/`.
+- Rules from the first review: the audio session is activated only when playback starts and
+  released on stop (never at launch — it would stop the owner's music). Scores refresh from ONE
+  app-level loop in `AppModel` (30s live / 120s otherwise, paused in background via scenePhase);
+  don't add per-screen refresh loops. Logos go through `ImageLoader`/`RemoteImage` (memory cache,
+  off-main decode), not AsyncImage. The mini player shows live video via `PlayerSurface`; PiP
+  attaches to whichever surface enters a window (`didMoveToWindow`). The player has a 15s stall
+  watchdog and counts a failure once (`retryPending`). Lock screen/headphone controls are wired.
 - Language mode is Swift 5 on purpose (fewer strict-concurrency errors without a local compiler).
 - Avoid type names that clash with system types (`Category` did; it's `ChannelCategory`).
 
