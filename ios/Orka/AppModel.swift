@@ -79,6 +79,7 @@ final class AppModel {
     @ObservationIgnored private let limiter = Limiter(4)
     @ObservationIgnored private var booted = false
     @ObservationIgnored private var matchCache: [String: [Channel]] = [:]
+    @ObservationIgnored private var sportsLoop: Task<Void, Never>?
     let player = PlayerModel()
 
     // MARK: Navigation
@@ -158,8 +159,36 @@ final class AppModel {
     func bootstrap() async {
         if booted { return }
         booted = true
-        Task { await refreshSports() }
+        startSportsUpdates()
         await loadActive()
+    }
+
+    /// Back in the foreground: scores resume, and a channel list older than 12 hours refreshes quietly.
+    func appBecameActive() {
+        guard booted else { return }
+        startSportsUpdates()
+        if active != nil, Date().timeIntervalSince(liveSyncedAt ?? .distantPast) > 12 * 3600 {
+            Task { await refreshLive() }
+        }
+    }
+
+    func appWentToBackground() {
+        sportsLoop?.cancel()
+        sportsLoop = nil
+    }
+
+    /// Keeps scores fresh everywhere (Home included): every 30 seconds while a game is live,
+    /// every 2 minutes otherwise. Paused while the app is in the background.
+    private func startSportsUpdates() {
+        guard sportsLoop == nil else { return }
+        sportsLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.refreshSports()
+                let wait: Double = self.anyLive ? 30 : 120
+                try? await Task.sleep(for: .seconds(wait))
+            }
+        }
     }
 
     private func loadActive() async {

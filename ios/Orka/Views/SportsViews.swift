@@ -52,13 +52,6 @@ struct SportsView: View {
                 }
             }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
-            // Scores keep updating while this tab is open: every 30 seconds during live games.
-            .task {
-                while !Task.isCancelled {
-                    await model.refreshSports()
-                    try? await Task.sleep(for: .seconds(model.anyLive ? 30 : 120))
-                }
-            }
         }
     }
 
@@ -164,13 +157,7 @@ struct GameDetailView: View {
         .background(OrkaBackground())
         .navigationTitle(g.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(model.currentGame(game).state == .live ? 30 : 120))
-                if Task.isCancelled { break }
-                await model.refreshSports()
-            }
-        }
+        .refreshable { await model.refreshSports() }
     }
 
     private func searchButton(_ text: String) -> some View {

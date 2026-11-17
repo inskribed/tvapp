@@ -14,6 +14,7 @@ struct GuideView: View {
     @State private var filter = ""
     @State private var showGroups = false
     @State private var rows: [Channel] = []
+    @State private var built = false
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,8 @@ struct GuideView: View {
     private var content: some View {
         if model.channels.isEmpty {
             emptyState
+        } else if !built {
+            Color.clear.frame(height: 1) // first build is a moment away; don't flash "no matches"
         } else if rows.isEmpty {
             Text(model.guideGroup == AppModel.favoritesGroup && filter.isEmpty
                  ? "No favorites yet. Touch and hold a channel to add one."
@@ -96,6 +99,7 @@ struct GuideView: View {
         let list = model.channels(inGroup: model.guideGroup)
         if typed.isEmpty {
             rows = list
+            built = true
             return
         }
         let words = typed.split(separator: " ").map { ChannelMatcher.normalize(String($0)) }.filter { !$0.isEmpty }
@@ -105,7 +109,10 @@ struct GuideView: View {
                 return words.allSatisfy { name.contains($0) }
             }
         }.value
-        if !Task.isCancelled { rows = filtered }
+        if !Task.isCancelled {
+            rows = filtered
+            built = true
+        }
     }
 }
 

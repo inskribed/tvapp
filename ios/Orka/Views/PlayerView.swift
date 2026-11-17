@@ -8,6 +8,13 @@ import OrkaCore
 final class PlayerLayerView: UIView {
     override class var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    /// Called each time this surface is actually put on screen (hidden tabs keep their copy off screen).
+    var onWindow: ((AVPlayerLayer) -> Void)?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil { onWindow?(playerLayer) }
+    }
 }
 
 struct PlayerSurface: UIViewRepresentable {
@@ -19,7 +26,7 @@ struct PlayerSurface: UIViewRepresentable {
         view.backgroundColor = .black
         view.playerLayer.player = player
         view.playerLayer.videoGravity = .resizeAspect
-        onLayer(view.playerLayer)
+        view.onWindow = onLayer
         return view
     }
 

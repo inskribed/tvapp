@@ -12,14 +12,8 @@ struct ChannelLogo: View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.08))
             if let s = channel.logo, let url = URL(string: s) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit().padding(4)
-                    default:
-                        initials
-                    }
-                }
+                RemoteImage(url: url) { initials }
+                    .padding(4)
             } else {
                 initials
             }
@@ -233,13 +227,7 @@ struct TeamLogo: View {
     var body: some View {
         Group {
             if let s = team.logo, let url = URL(string: s) {
-                AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        image.resizable().scaledToFit()
-                    } else {
-                        Circle().fill(.white.opacity(0.12))
-                    }
-                }
+                RemoteImage(url: url) { Circle().fill(.white.opacity(0.12)) }
             } else {
                 Circle().fill(.white.opacity(0.12))
             }
@@ -329,7 +317,11 @@ struct MiniPlayerBar: View {
                     model.showPlayer = true
                 } label: {
                     HStack(spacing: 12) {
-                        ChannelLogo(channel: channel, width: 44, height: 32)
+                        // The live picture keeps going in a small window, like on the TV.
+                        PlayerSurface(player: player.avPlayer) { player.attach(layer: $0) }
+                            .frame(width: 72, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .allowsHitTesting(false)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(channel.name).font(.subheadline.weight(.semibold)).lineLimit(1)
                             Text(player.status.isEmpty ? (now?.title ?? "Now playing") : player.status)
