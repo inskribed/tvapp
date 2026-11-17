@@ -147,7 +147,7 @@ public struct XtreamClient: Sendable {
         out.reserveCapacity(raw.count)
         for item in raw {
             guard let o = item.value, let id = o.category_id?.value else { continue }
-            out.append(ChannelCategory(id: id, name: o.category_name?.value ?? "ChannelCategory \(id)"))
+            out.append(ChannelCategory(id: id, name: o.category_name?.value ?? "Category \(id)"))
         }
         return out
     }

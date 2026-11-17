@@ -18,6 +18,11 @@ A personal IPTV player for Android TV / Google TV (Nvidia Shield, onn 4K Plus).
 - **In the player:** up/down changes channel, OK shows channel info, Back shrinks it to a small window; Back again stops it.
 - **Settings:** add more playlists, switch between them, change stream format (TS/HLS) if a channel won't play.
 
+## iPhone app
+
+A native SwiftUI iPhone version lives in `ios/` (see CLAUDE.md). GitHub compiles it and runs its
+tests on every change; installing on a phone needs an Apple Developer account (TestFlight).
+
 ## How builds work
 
 Every push to `main` builds a signed APK with GitHub Actions and publishes it as the latest release.

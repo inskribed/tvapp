@@ -52,6 +52,43 @@ No DI, no Room yet. State lives in `AppViewModel` as Compose `mutableStateOf`.
   Add playlist), `Components` (TvRow, TvButton, TvTextField, ChannelList),
   `player/PlayerScreen` (ExoPlayer, reconnect, channel up/down, pause).
 
+## iPhone app (`ios/`)
+
+Native SwiftUI, iOS 26+ (real Liquid Glass: `glassEffect`, `.glass` button styles), iPhone only,
+bundle id `com.inskribed.orka`. Not run locally (no Swift/Xcode in the cloud sandbox): GitHub's
+macOS runner is the compiler/test loop — `.github/workflows/ios.yml` (runs on `ios/**` pushes):
+`swift test` for the logic package, then XcodeGen + `xcodebuild` for the simulator. Read failures
+with `get_job_logs` (the "Show compile errors" step greps `error:`). The Android release workflow
+ignores `ios/**` and `design/**`.
+
+- `ios/OrkaCore/` — Swift package, Foundation only, unit-tested (15 tests): `XtreamClient`
+  (login, live categories/streams, short EPG, HLS stream URLs; Codable with `FlexString`/`Lossy`
+  for sloppy provider JSON), `Sports` (ESPN), `ChannelMatcher` (port of the Kotlin one),
+  `LiveCacheStore` (parsed channel list on disk), `ContentKind` (live/movies/series).
+  Android's Kotlin logic is NOT shared; if matcher aliases or parsing change, change both.
+- `ios/Orka/` — app. `project.yml` is the XcodeGen spec (the `.xcodeproj` is generated, not
+  committed). `AppModel` = all state (@Observable), `PlayerModel` = AVPlayer (HLS only — AVPlayer
+  can't play raw .ts; retry/backoff like Android; PiP via AVPlayerLayer; audio continues in the
+  mini player bar), `Store` (UserDefaults; playlist logins in Keychain). Views in `Views/`.
+- Language mode is Swift 5 on purpose (fewer strict-concurrency errors without a local compiler).
+- Avoid type names that clash with system types (`Category` did; it's `ChannelCategory`).
+
+**Launch/sync policy (owner's priority: get to sports games fast):** at launch only the saved
+channel list loads from disk (refreshed in the background only if >12h old) and ESPN scores load
+immediately. Guide data is fetched lazily per visible channel (max 4 at once, 30 min cache).
+Movies and Series must NEVER sync at launch: add them as separate `ContentKind` syncs triggered
+manually from Settings > Library (placeholders exist, "Coming soon"), on both Android and iOS.
+
+**iOS UX decisions:** opens to Home (live/upcoming games summary, recently watched, favorites);
+tabs Home, Guide (list by group, no time grid on phone), Sports, Favorites, Search; Settings is a
+sheet from Home. Touch and hold = favorite. Swipe up/down in the player = channel up/down.
+Back out of the player = mini player bar above the tab bar. Long lists use light `listPanel`
+instead of glass for smoothness; glass is for cards, controls and the mini player.
+
+**Not done yet / next:** TestFlight automation (needs the owner's Apple Developer account; add
+signing + `fastlane`/`xcodebuild archive` workflow), Inter font (iOS uses the system font),
+Movies/Series, program search, widgets.
+
 ## Product decisions already made
 
 - App opens to the TV Guide (the old Live TV list section was removed; the guide's List view
