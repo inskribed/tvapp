@@ -30,7 +30,7 @@ public struct Playlist: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-public struct Category: Codable, Hashable, Identifiable, Sendable {
+public struct ChannelCategory: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
 
@@ -64,10 +64,10 @@ public struct Channel: Codable, Hashable, Identifiable, Sendable {
 }
 
 public struct LiveData: Codable, Sendable {
-    public var categories: [Category]
+    public var categories: [ChannelCategory]
     public var channels: [Channel]
 
-    public init(categories: [Category], channels: [Channel]) {
+    public init(categories: [ChannelCategory], channels: [Channel]) {
         self.categories = categories
         self.channels = channels
     }

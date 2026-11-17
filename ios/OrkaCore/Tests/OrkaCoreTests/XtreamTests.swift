@@ -89,7 +89,7 @@ final class XtreamTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("orka-test-\(UUID().uuidString)")
         let store = LiveCacheStore(directory: dir)
         let data = LiveData(
-            categories: [Category(id: "1", name: "Sports")],
+            categories: [ChannelCategory(id: "1", name: "Sports")],
             channels: [Channel(playlistId: "p", streamId: "9", num: 3, name: "ESPN", logo: nil, categoryId: "1", epgId: nil)]
         )
         XCTAssertNil(store.load(playlistId: "p"))

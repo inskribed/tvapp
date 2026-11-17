@@ -115,7 +115,7 @@ struct GroupPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
 
-    private var categories: [Category] {
+    private var categories: [ChannelCategory] {
         let counts = model.library.counts
         let all = model.categories.filter { (counts[$0.id] ?? 0) > 0 }
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

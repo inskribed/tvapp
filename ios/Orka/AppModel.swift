@@ -23,7 +23,7 @@ struct EpgEntry {
 
 /// Everything Live TV needs, prepared off the main thread.
 struct Library: Sendable {
-    var categories: [Category] = []
+    var categories: [ChannelCategory] = []
     var channels: [Channel] = []
     var normalizedNames: [String] = []
     var counts: [String: Int] = [:]
@@ -101,7 +101,7 @@ final class AppModel {
     private(set) var syncStates: [ContentKind: SyncState] = [.live: .idle, .movies: .idle, .series: .idle]
     private(set) var matcher: ChannelMatcher?
     var channels: [Channel] { library.channels }
-    var categories: [Category] { library.categories }
+    var categories: [ChannelCategory] { library.categories }
 
     // MARK: Favorites and recents
     private(set) var favorites: [Channel] = []

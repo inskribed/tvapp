@@ -141,13 +141,13 @@ public struct XtreamClient: Sendable {
         let category_name: FlexString?
     }
 
-    public static func parseCategories(_ data: Data) throws -> [Category] {
+    public static func parseCategories(_ data: Data) throws -> [ChannelCategory] {
         let raw = try JSONDecoder().decode([Lossy<RawCategory>].self, from: data)
-        var out: [Category] = []
+        var out: [ChannelCategory] = []
         out.reserveCapacity(raw.count)
         for item in raw {
             guard let o = item.value, let id = o.category_id?.value else { continue }
-            out.append(Category(id: id, name: o.category_name?.value ?? "Category \(id)"))
+            out.append(ChannelCategory(id: id, name: o.category_name?.value ?? "ChannelCategory \(id)"))
         }
         return out
     }
