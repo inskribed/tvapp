@@ -1,0 +1,311 @@
+import UIKit
+import SwiftUI
+import OrkaCore
+
+struct SettingsView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var showAdd = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                playlistsSection
+                librarySection
+                sportsSection
+                appearanceSection
+                aboutSection
+            }
+            .scrollContentBackground(.hidden)
+            .background(OrkaBackground())
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showAdd) {
+                NavigationStack {
+                    ScrollView {
+                        AddPlaylistForm { showAdd = false }
+                            .padding(16)
+                    }
+                    .background(OrkaBackground())
+                    .navigationTitle("Add a playlist")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showAdd = false }
+                        }
+                    }
+                }
+            }
+            .task { await model.refreshAccount() }
+        }
+    }
+
+    private var playlistsSection: some View {
+        Section("Playlists") {
+            ForEach(model.playlists) { p in
+                Button {
+                    if p.id != model.active?.id { model.setActive(p.id) }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.name)
+                            Text(p.server).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if p.id == model.active?.id {
+                            Text("In use").font(.caption).foregroundStyle(model.accent)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .swipeActions {
+                    Button("Remove", role: .destructive) { model.removePlaylist(p.id) }
+                }
+            }
+            Button("Add playlist") { showAdd = true }
+            if let a = model.account {
+                Text(accountLine(a)).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func accountLine(_ a: AccountInfo) -> String {
+        var parts: [String] = []
+        if let s = a.status { parts.append(s) }
+        if let e = a.expiresAt { parts.append("expires " + e.formatted(date: .abbreviated, time: .omitted)) }
+        if let c = a.maxConnections { parts.append("\(c) connection\(c == 1 ? "" : "s") allowed") }
+        return "Account: " + parts.joined(separator: "  ·  ")
+    }
+
+    /// Live TV loads by itself. Movies and Series wait until you ask for them.
+    private var librarySection: some View {
+        Section {
+            LabeledContent("Live TV") {
+                switch model.syncStates[.live] ?? .idle {
+                case .syncing: Text("Syncing…").foregroundStyle(.secondary)
+                case .failed(let message): Text(message).foregroundStyle(.red).lineLimit(1)
+                case .idle:
+                    if let at = model.liveSyncedAt {
+                        Text(at.formatted(.relative(presentation: .named))).foregroundStyle(.secondary)
+                    } else {
+                        Text("Not synced").foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Button("Sync Live TV now") { Task { await model.refreshLive() } }
+                .disabled(model.syncStates[.live] == .syncing)
+            LabeledContent("Movies") { Text("Coming soon").foregroundStyle(.secondary) }
+            LabeledContent("Series") { Text("Coming soon").foregroundStyle(.secondary) }
+        } header: {
+            Text("Library")
+        } footer: {
+            Text("Orka only loads Live TV when it opens, so you get to your games fast. Movies and Series will sync only when you choose to.")
+        }
+    }
+
+    private var sportsSection: some View {
+        Section("Sports") {
+            Toggle("Show scores", isOn: Binding(get: { model.showScores }, set: { model.setShowScores($0) }))
+            NavigationLink {
+                TeamPickerView()
+            } label: {
+                HStack {
+                    Text("My teams")
+                    Spacer()
+                    Text(model.favoriteTeams.isEmpty ? "None yet" : "\(model.favoriteTeams.count) selected")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var appearanceSection: some View {
+        Section("Appearance") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Accent color")
+                    Spacer()
+                    Text(model.preset.name).foregroundStyle(model.accent)
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
+                    ForEach(Brand.presets) { p in
+                        Button {
+                            model.setAccent(p)
+                        } label: {
+                            Circle()
+                                .fill(p.color)
+                                .frame(width: 44, height: 44)
+                                .overlay {
+                                    if p.name == model.accentName {
+                                        Image(systemName: "checkmark").font(.headline.bold()).foregroundStyle(.black.opacity(0.75))
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(p.name)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var aboutSection: some View {
+        Section("About") {
+            let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+            let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            LabeledContent("Version", value: "\(v) (\(b))")
+        }
+    }
+}
+
+struct TeamPickerView: View {
+    @Environment(AppModel.self) private var model
+    @State private var league: League = .nfl
+    @State private var search = ""
+
+    private var shown: [Team] {
+        let all = model.teams[league] ?? []
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty { return all }
+        return all.filter { $0.displayName.lowercased().contains(q) || $0.abbr.lowercased() == q }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Picker("League", selection: $league) {
+                    ForEach(League.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+            }
+            Section {
+                if let error = model.teamsError, model.teams[league] == nil {
+                    Text(error).foregroundStyle(.secondary)
+                } else if model.teams[league] == nil {
+                    HStack(spacing: 10) { ProgressView(); Text("Loading teams…").foregroundStyle(.secondary) }
+                } else if shown.isEmpty {
+                    Text("No teams match \"\(search)\".").foregroundStyle(.secondary)
+                } else {
+                    ForEach(shown) { team in
+                        Button {
+                            model.toggleTeam(team)
+                        } label: {
+                            HStack(spacing: 12) {
+                                TeamLogo(team: team, size: 30)
+                                Text(team.displayName)
+                                Spacer()
+                                Image(systemName: model.isFavoriteTeam(team) ? "star.fill" : "star")
+                                    .foregroundStyle(model.isFavoriteTeam(team) ? Brand.star : Color.secondary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(OrkaBackground())
+        .navigationTitle("My teams")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: "Find a team")
+        .task(id: league) { await model.loadTeams(league) }
+    }
+}
+
+/// Xtream Codes login. Used on first launch and from Settings.
+struct AddPlaylistForm: View {
+    @Environment(AppModel.self) private var model
+    var onDone: () -> Void = {}
+
+    @State private var name = ""
+    @State private var server = ""
+    @State private var username = ""
+    @State private var password = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(spacing: 14) {
+            field("Name (optional)", text: $name)
+            field("Server URL", text: $server, placeholder: "http://example.com:8080", keyboard: .URL)
+            field("Username", text: $username)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Password").font(.footnote).foregroundStyle(.secondary)
+                SecureField("Password", text: $password)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            Button {
+                submit()
+            } label: {
+                Text(busy ? "Connecting…" : "Save and connect").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .disabled(busy)
+            if let error {
+                Text(error).font(.subheadline).foregroundStyle(.red).multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private func field(_ title: String, text: Binding<String>, placeholder: String = "", keyboard: UIKeyboardType = .default) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.footnote).foregroundStyle(.secondary)
+            TextField(placeholder.isEmpty ? title : placeholder, text: text)
+                .keyboardType(keyboard)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(14)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func submit() {
+        if busy { return }
+        busy = true
+        error = nil
+        Task {
+            let result = await model.addPlaylist(name: name, server: server, username: username, password: password)
+            busy = false
+            if let result { error = result } else { onDone() }
+        }
+    }
+}
+
+/// First launch, before there's a playlist.
+struct WelcomeView: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                Image("orka_mark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 84, height: 95)
+                    .padding(.top, 48)
+                Text("Welcome to Orka").font(.largeTitle.bold())
+                Text("Add your Xtream Codes login to start watching. Your channels load once, then Orka opens straight to your games.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                AddPlaylistForm()
+                    .padding(.top, 8)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 32)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(OrkaBackground())
+    }
+}

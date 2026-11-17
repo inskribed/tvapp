@@ -34,3 +34,12 @@ render("preview", f'''<svg xmlns="http://www.w3.org/2000/svg" width="720" height
 <circle cx="330" cy="130" r="80" fill="#14141B"/><g transform="translate(330 130) scale(0.3) translate(-285 -229)">{mark.mark_svg("e")}</g>
 <g transform="translate(470 80) scale(0.18) translate(-120 -50)">{mark.mark_svg("f")}</g>
 <text x="540" y="140" font-family="Inter" font-weight="700" font-size="44" fill="#F2F2F5">Orka</text></svg>''', 720, 260, BG)
+
+# 4) iOS app icon: 1024x1024, opaque (the App Store rejects transparency), corners are masked by iOS
+render("ios_icon", f'''<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+<radialGradient id="ibg" cx="0.28" cy="0.18" r="0.95"><stop offset="0" stop-color="#0F4A47"/><stop offset="0.55" stop-color="#0B1416"/><stop offset="1" stop-color="{BG}"/></radialGradient>
+<radialGradient id="ilime" cx="0.9" cy="1.0" r="0.6"><stop offset="0" stop-color="#C9FF3F" stop-opacity="0.22"/><stop offset="1" stop-color="#C9FF3F" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1024" height="1024" fill="url(#ibg)"/><rect width="1024" height="1024" fill="url(#ilime)"/>
+<g transform="translate(512 512) scale(1.7) translate(-285 -229)">{mark.mark_svg("i")}</g></svg>''', 1024, 1024, BG)

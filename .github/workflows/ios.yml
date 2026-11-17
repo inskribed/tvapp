@@ -1,0 +1,53 @@
+name: iOS build and tests
+
+# Checks that the iPhone app compiles and that Orka's logic tests pass.
+# It does not publish anything; the Android release workflow is separate.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode 26
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          NEW=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$NEW" ]; then sudo xcode-select -s "$NEW"; fi
+          xcodebuild -version
+          xcrun --show-sdk-version
+
+      - name: Test OrkaCore (logic)
+        working-directory: ios/OrkaCore
+        run: swift test 2>&1 | tail -n 60
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build the app for the iPhone simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Orka.xcodeproj \
+            -scheme Orka \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build.log | tail -n 25
+
+      - name: Show compile errors
+        if: failure()
+        working-directory: ios
+        run: grep -E "error:" build.log | sort -u | head -60 || true
