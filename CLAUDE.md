@@ -77,6 +77,12 @@ ignores `ios/**` and `design/**`.
   off-main decode), not AsyncImage. The mini player shows live video via `PlayerSurface`; PiP
   attaches to whichever surface enters a window (`didMoveToWindow`). The player has a 15s stall
   watchdog and counts a failure once (`retryPending`). Lock screen/headphone controls are wired.
+- Search is whole-word (`OrkaCore/ChannelSearch`: each query word must start a word in the name;
+  squashed-substring fallback only when nothing matches) — the old squashed search made "|us|"
+  match "Museum". Hidden channel groups (Settings > Library > Channel groups, per playlist in
+  UserDefaults `hidden_groups_<playlistId>`, quick "by country" tags from `groupPrefix`) are
+  removed from `visibleChannels`, which Guide, Search and the game matcher use; favorites/recents
+  keep them. Android still has the old squashed search and no group hiding (parity TODO).
 - Language mode is Swift 5 on purpose (fewer strict-concurrency errors without a local compiler).
 - Avoid type names that clash with system types (`Category` did; it's `ChannelCategory`).
 
