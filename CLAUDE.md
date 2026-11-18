@@ -94,7 +94,9 @@ Movies and Series must NEVER sync at launch: add them as separate `ContentKind` 
 manually from Settings > Library (placeholders exist, "Coming soon"), on both Android and iOS.
 
 **iOS UX decisions:** opens to Home (live/upcoming games summary, recently watched, favorites);
-tabs Home, Guide (list by group, no time grid on phone), Sports, Favorites, Search; Settings is a
+tabs Home, Guide (no time grid on phone: group tiles at the top jump to a group; "All channels"
+is one list with a pinned glass header per shown group; single groups via the Groups sheet), Sports,
+Favorites, Search; Settings is a
 sheet from Home. Touch and hold = favorite. Swipe up/down in the player = channel up/down.
 Back out of the player = mini player bar above the tab bar. Long lists use light `listPanel`
 instead of glass for smoothness; glass is for cards, controls and the mini player.
