@@ -10,8 +10,8 @@
 
     <application
         android:allowBackup="true"
-        android:banner="@drawable/banner"
-        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/banner_orka"
+        android:icon="@mipmap/ic_orka"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.TvApp"

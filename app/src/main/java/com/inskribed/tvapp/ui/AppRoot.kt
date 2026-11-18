@@ -16,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import com.inskribed.tvapp.R
 import androidx.compose.animation.core.animateDpAsState
@@ -101,11 +103,22 @@ fun AppRoot(vm: AppViewModel) {
 private fun MainScreen(vm: AppViewModel) {
     val contentFocus = remember { FocusRequester() }
     var sidebarOpen by remember { mutableStateOf(true) }
+    val isGuide = vm.section == Section.GUIDE
+    // TV Guide, TiviMate-style: inside the channels the menu slides away and the guide uses the full
+    // width; otherwise the guide sits beside the collapsed menu. Done as a slide (read only while
+    // drawing), so the guide isn't re-laid out on every animation frame.
+    val guideHidesMenu = isGuide && vm.guideImmersive
+    val contentShift by animateDpAsState(
+        if (isGuide && !guideHidesMenu) SIDEBAR_COLLAPSED + 4.dp else 0.dp,
+        animationSpec = tween(220),
+        label = "content",
+    )
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(start = SIDEBAR_COLLAPSED + 28.dp, top = 32.dp, end = 40.dp)
+                .padding(start = if (isGuide) 24.dp else SIDEBAR_COLLAPSED + 28.dp, top = 32.dp, end = if (isGuide) 24.dp else 40.dp)
+                .graphicsLayer { translationX = contentShift.toPx() }
                 .focusRequester(contentFocus)
                 .focusGroup()
         ) {
@@ -117,29 +130,38 @@ private fun MainScreen(vm: AppViewModel) {
                 Section.SETTINGS -> SettingsScreen(vm)
             }
         }
-        // Dim the screen behind the open menu.
-        val dim by animateFloatAsState(if (sidebarOpen) 0.55f else 0f, label = "dim")
-        if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
+        MenuDim(sidebarOpen)
         Sidebar(
             vm,
             open = sidebarOpen,
+            hidden = guideHidesMenu,
             onOpenChange = { sidebarOpen = it },
             toContent = { runCatching { contentFocus.requestFocus() } },
         )
     }
 }
 
+/** Dims the screen behind the open menu. Its own composable so the fade doesn't redraw the screen behind it. */
+@Composable
+private fun MenuDim(open: Boolean) {
+    val dim by animateFloatAsState(if (open) 0.55f else 0f, label = "dim")
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = dim }.background(Color.Black))
+}
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Sidebar(vm: AppViewModel, open: Boolean, onOpenChange: (Boolean) -> Unit, toContent: () -> Unit) {
+private fun Sidebar(vm: AppViewModel, open: Boolean, hidden: Boolean, onOpenChange: (Boolean) -> Unit, toContent: () -> Unit) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         delay(100)
         runCatching { firstFocus.requestFocus() }
     }
     val width by animateDpAsState(if (open) SIDEBAR_EXPANDED else SIDEBAR_COLLAPSED, label = "sidebar")
+    // Slides off to the left while you're inside the TV Guide's channels.
+    val slide by animateDpAsState(if (hidden && !open) -(SIDEBAR_COLLAPSED + 12.dp) else 0.dp, tween(220), label = "slide")
     Column(
         Modifier
+            .graphicsLayer { translationX = slide.toPx() }
             .onFocusChanged { onOpenChange(it.hasFocus) }
             // Entering the menu from the right always lands on the current section.
             .focusProperties { enter = { firstFocus } }

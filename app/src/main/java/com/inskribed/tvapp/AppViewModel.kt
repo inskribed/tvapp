@@ -2,7 +2,7 @@ package com.inskribed.tvapp
 
 import android.app.Application
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -166,7 +166,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // TV guide
     /** Guide data by channel key. Only channels that have been on screen are fetched. */
-    val epg = mutableStateMapOf<String, EpgEntry>()
+    // One small state per channel, so guide data arriving for one row redraws only that row.
+    // (A single shared map made every visible row redraw whenever any channel's data landed.)
+    private val epgStates = LinkedHashMap<String, MutableState<EpgEntry?>>()
+    private fun epgState(key: String) = epgStates.getOrPut(key) { mutableStateOf(null) }
+    /** Guide data for one channel, or null if not loaded yet. Reading it in a composable observes only this channel. */
+    fun epgFor(key: String): EpgEntry? = epgState(key).value
+    /** True while focus is inside the TV Guide's channels, so the menu and group list slide away. */
+    var guideImmersive by mutableStateOf(false)
     private val epgGate = Semaphore(4)
     var guideCategory by mutableStateOf(if (favorites.isNotEmpty()) FAVORITES_CATEGORY else ALL_CATEGORIES)
 
@@ -241,7 +248,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         groupCounts = emptyMap()
         hiddenGroups = prefs.hiddenGroups(id)
         account = null
-        epg.clear()
+        epgStates.values.forEach { it.value = null }
         loadActive()
     }
 
@@ -450,9 +457,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val age = System.currentTimeMillis() - e.fetchedMs
             return age < if (e.failed) EPG_RETRY_MS else EPG_FRESH_MS
         }
-        if (fresh(epg[ch.key])) return
+        if (fresh(epgStates[ch.key]?.value)) return
         epgGate.withPermit {
-            if (fresh(epg[ch.key])) return
+            if (fresh(epgStates[ch.key]?.value)) return
             val entry = try {
                 EpgEntry(client.shortEpg(p, ch.streamId), System.currentTimeMillis(), false)
             } catch (e: CancellationException) {
@@ -460,14 +467,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 EpgEntry(emptyList(), System.currentTimeMillis(), true)
             }
-            if (epg.size > EPG_MAX_CHANNELS) epg.keys.take(EPG_MAX_CHANNELS / 4).toList().forEach { epg.remove(it) }
-            epg[ch.key] = entry
+            // Keep memory in check on the 2GB onn: forget the oldest channels' programs.
+            val loaded = epgStates.values.count { it.value != null }
+            if (loaded > EPG_MAX_CHANNELS) {
+                epgStates.values.filter { it.value != null }.take(EPG_MAX_CHANNELS / 4).forEach { it.value = null }
+            }
+            epgState(ch.key).value = entry
         }
     }
 
     /** The program on now and the one after it, if the guide has them. */
     fun nowAndNext(ch: Channel): Pair<Program?, Program?> {
-        val list = epg[ch.key]?.programs ?: return null to null
+        val list = epgFor(ch.key)?.programs ?: return null to null
         val now = System.currentTimeMillis()
         val i = list.indexOfFirst { now >= it.startMs && now < it.endMs }
         if (i < 0) return null to list.firstOrNull { it.startMs > now }

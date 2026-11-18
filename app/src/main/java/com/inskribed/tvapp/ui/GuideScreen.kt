@@ -1,6 +1,17 @@
 package com.inskribed.tvapp.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -77,8 +88,11 @@ private const val MAX_OFFSET_HOURS = 12
 
 private data class GuideFocus(val channel: Channel, val program: Program?)
 
+private val GROUPS_WIDTH = 270.dp
+
 fun formatTime(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ms))
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun GuideScreen(vm: AppViewModel) {
     when {
@@ -108,17 +122,40 @@ fun GuideScreen(vm: AppViewModel) {
 
     val cat = vm.guideCategory
     val list = remember(vm.channels, vm.favorites, cat) { vm.guideChannels(cat) }
-    var focus by remember { mutableStateOf<GuideFocus?>(null) }
+    // Read only by the details header, so moving around the guide doesn't redraw every row.
+    val focusState = remember { mutableStateOf<GuideFocus?>(null) }
     val listState = rememberLazyListState()
-
-    // Group list (opens with ◀ from the channel column, like TiviMate).
-    var groupsOpen by remember { mutableStateOf(false) }
     val groups = remember(vm.categories, vm.channels, vm.favorites.isEmpty()) { guideGroups(vm) }
-    fun backToGuide() {
-        groupsOpen = false
-        vm.pendingFocusKey = vm.guideChannels(vm.guideCategory).firstOrNull()?.key
+
+    // Depth, TiviMate-style: in the group list (menu as icons, groups showing) or inside the
+    // channels (menu and groups slide away and the guide fills the screen).
+    val immersive = vm.guideImmersive
+    DisposableEffect(Unit) { onDispose { vm.guideImmersive = false } }
+    val groupFocus = remember { FocusRequester() }
+    val groupsState = rememberLazyListState()
+    var groupsReady by remember { mutableStateOf(false) }
+    var lastChannelKey by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    /** ◀ from a channel (or Back): the group list slides back in with the current group focused. */
+    fun showGroups() {
+        vm.guideImmersive = false
+        scope.launch {
+            val idx = groups.indexOfFirst { it.id == vm.guideCategory }
+            val visible = groupsState.layoutInfo.visibleItemsInfo.any { it.index == idx }
+            if (idx >= 0 && !visible) groupsState.scrollToItem(maxOf(0, idx - 3))
+            delay(16)
+            runCatching { groupFocus.requestFocus() }
+        }
     }
-    BackHandler(enabled = groupsOpen) { backToGuide() }
+
+    /** ▶ or OK on a group: back into the channels, where you left off if that channel is still here. */
+    fun enterGuide() {
+        val chans = vm.guideChannels(vm.guideCategory)
+        vm.pendingFocusKey = lastChannelKey?.takeIf { k -> chans.any { it.key == k } } ?: chans.firstOrNull()?.key
+    }
+
+    BackHandler(enabled = immersive) { showGroups() }
     LaunchedEffect(cat) { if (list.isNotEmpty()) listState.scrollToItem(0) }
 
     val pending = vm.pendingFocusKey
@@ -128,17 +165,35 @@ fun GuideScreen(vm: AppViewModel) {
         if (idx >= 0) listState.scrollToItem(maxOf(0, idx - 2)) else vm.pendingFocusKey = null
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // How far the guide is pushed right by the group list. Read only while drawing (no re-layout).
+    val groupsShift by animateDpAsState(if (immersive) 0.dp else GROUPS_WIDTH, tween(220), label = "groups")
+    val onFocus: (GuideFocus) -> Unit = {
+        focusState.value = it
+        lastChannelKey = it.channel.key
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            // Coming in from the menu lands on the current group.
+            .focusProperties { enter = { if (groupsReady) groupFocus else FocusRequester.Default } }
+            .focusGroup()
+    ) {
+      Column(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer { translationX = groupsShift.toPx() }
+            .onFocusChanged { vm.guideImmersive = it.hasFocus }
+            .focusGroup()
+      ) {
         // Leave room for the small player window in the top-right corner.
-        GuideHeader(focus, now, if (vm.playerMini && vm.currentChannel != null) MINI_PLAYER_WIDTH.dp else 0.dp)
-      Box(Modifier.fillMaxSize()) {
-       Column(Modifier.fillMaxSize()) {
+        GuideHeader(focusState, now, if (vm.playerMini && vm.currentChannel != null) MINI_PLAYER_WIDTH.dp else 0.dp)
         val groupName = groups.firstOrNull { it.id == cat }?.name ?: "All channels"
         Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(groupName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = AppColors.Text, maxLines = 1)
             Spacer(Modifier.width(12.dp))
             Text(
-                "${list.size} channels  ·  ◀ from a channel for groups",
+                "${list.size} channels  ·  ◀ for groups",
                 modifier = Modifier.weight(1f),
                 fontSize = 13.sp,
                 color = AppColors.TextDim,
@@ -171,8 +226,8 @@ fun GuideScreen(vm: AppViewModel) {
                             channel = ch,
                             now = now,
                             onPlay = { vm.play(list, index) },
-                            onFocus = { focus = it },
-                            onOpenGroups = { groupsOpen = true },
+                            onFocus = onFocus,
+                            onOpenGroups = { showGroups() },
                         )
                     }
                 }
@@ -213,25 +268,33 @@ fun GuideScreen(vm: AppViewModel) {
                                 onShift = { delta ->
                                     offsetHours = (offsetHours + delta).coerceIn(0, MAX_OFFSET_HOURS)
                                 },
-                                onFocus = { focus = it },
-                                onOpenGroups = { groupsOpen = true },
+                                onFocus = onFocus,
+                                onOpenGroups = { showGroups() },
                             )
                         }
                     }
                 }
             }
         }
-       }
-        if (groupsOpen) {
-            GroupsPanel(
-                groups = groups,
-                selected = cat,
-                onSelect = { vm.guideCategory = it },
-                onDone = { backToGuide() },
-                onLeave = { groupsOpen = false },
-            )
-        }
       }
+
+        // The group list, sliding in from the left (and fading) when you leave the channels.
+        GroupsColumn(
+            groups = groups,
+            selected = cat,
+            state = groupsState,
+            focusRequester = groupFocus,
+            onReady = { groupsReady = it },
+            onSelect = { vm.guideCategory = it },
+            onEnter = { enterGuide() },
+            modifier = Modifier
+                .width(GROUPS_WIDTH)
+                .fillMaxHeight()
+                .graphicsLayer {
+                    translationX = (groupsShift - GROUPS_WIDTH).toPx()
+                    alpha = (groupsShift / GROUPS_WIDTH).coerceIn(0f, 1f)
+                },
+        )
     }
 }
 
@@ -332,7 +395,7 @@ private fun GuideListRow(
                     )
                 }
             } else {
-                val e = vm.epg[channel.key]
+                val e = vm.epgFor(channel.key)
                 DimText(
                     when {
                         channel.epgId.isNullOrBlank() -> "No guide info"
@@ -357,49 +420,55 @@ private fun guideGroups(vm: AppViewModel): List<GuideGroup> {
     }
 }
 
-/** Vertical list of channel groups over the left of the guide. Moving onto a group shows it. */
+/**
+ * The guide's group list (TiviMate-style): always to the left of the channels, sliding away while
+ * you're inside them. Moving onto a group shows it; OK or ▶ goes back into the channels.
+ */
 @Composable
-private fun GroupsPanel(
+private fun GroupsColumn(
     groups: List<GuideGroup>,
     selected: String,
+    state: LazyListState,
+    focusRequester: FocusRequester,
+    onReady: (Boolean) -> Unit,
     onSelect: (String) -> Unit,
-    onDone: () -> Unit,
-    onLeave: () -> Unit,
+    onEnter: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val state = rememberLazyListState()
-    val selectedFocus = remember { FocusRequester() }
-    var hadFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(groups) {
         val idx = groups.indexOfFirst { it.id == selected }
-        state.scrollToItem(maxOf(0, idx - 3))
-        delay(50)
-        runCatching { selectedFocus.requestFocus() }
+        if (idx > 3) state.scrollToItem(idx - 3)
     }
-    Box(
-        Modifier
-            .fillMaxHeight()
-            .width(300.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(AppColors.Panel)
-            .onFocusChanged {
-                if (it.hasFocus) hadFocus = true
-                else if (hadFocus) onLeave() // went left to the menu
-            }
-    ) {
+    Column(modifier.padding(end = 16.dp)) {
+        Text(
+            "Groups",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = AppColors.Accent,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+        )
         LazyColumn(
             state = state,
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(groups, key = { it.id }) { g ->
+                val isSelected = g.id == selected
+                if (isSelected) {
+                    // Lets the screen know the focus target for "come back to the groups" exists.
+                    DisposableEffect(Unit) {
+                        onReady(true)
+                        onDispose { onReady(false) }
+                    }
+                }
                 TvRow(
-                    onClick = onDone,
-                    selected = g.id == selected,
+                    onClick = onEnter,
+                    selected = isSelected,
                     verticalPadding = 9,
-                    modifier = (if (g.id == selected) Modifier.focusRequester(selectedFocus) else Modifier)
-                        .onFocusChanged { if (it.isFocused && g.id != selected) onSelect(g.id) }
+                    modifier = (if (isSelected) Modifier.focusRequester(focusRequester) else Modifier)
+                        .onFocusChanged { if (it.isFocused && !isSelected) onSelect(g.id) }
                         .onPreviewKeyEvent { e ->
-                            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onDone(); true } else false
+                            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onEnter(); true } else false
                         },
                 ) {
                     Text(g.name, modifier = Modifier.weight(1f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -412,10 +481,11 @@ private fun GroupsPanel(
 }
 
 @Composable
-private fun GuideHeader(focus: GuideFocus?, now: Long, reserveEnd: Dp) {
+private fun GuideHeader(focusState: State<GuideFocus?>, now: Long, reserveEnd: Dp) {
     // With the small player showing, the header grows so the grid starts below it.
     val height = if (reserveEnd > 0.dp) 176.dp else 118.dp
     Column(Modifier.fillMaxWidth().height(height).padding(end = reserveEnd)) {
+        val focus = focusState.value
         if (focus == null) {
             ScreenTitle("TV Guide", "OK to watch  ·  Hold OK to favorite  ·  ◀ ▶ through time  ·  ◀ on a channel for groups")
             return@Column
@@ -503,7 +573,7 @@ private fun GuideRow(
         }
     }
 
-    val entry = vm.epg[channel.key]
+    val entry = vm.epgFor(channel.key)
     val programs = entry?.programs.orEmpty().filter { it.endMs > windowStart && it.startMs < windowEnd }
 
     Row(Modifier.fillMaxWidth().height(rowHeight)) {
