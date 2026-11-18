@@ -72,7 +72,8 @@ struct SearchView: View {
             .task(id: model.searchQuery) {
                 try? await Task.sleep(for: .milliseconds(200))
                 if Task.isCancelled { return }
-                results = model.search(model.searchQuery)
+                let found = await model.search(model.searchQuery)
+                if !Task.isCancelled { results = found }
             }
         }
     }

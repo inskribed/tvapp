@@ -46,7 +46,15 @@ struct GuideView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.channels.isEmpty {
+        if model.channels.isEmpty && model.allChannelCount > 0 {
+            VStack(spacing: 12) {
+                Text("All channel groups are hidden").font(.headline)
+                Button("Choose groups") { model.showSettings = true }
+                    .buttonStyle(.glassProminent)
+            }
+            .padding(.top, 60)
+            .frame(maxWidth: .infinity)
+        } else if model.channels.isEmpty {
             emptyState
         } else if !built {
             Color.clear.frame(height: 1) // first build is a moment away; don't flash "no matches"
@@ -102,12 +110,9 @@ struct GuideView: View {
             built = true
             return
         }
-        let words = typed.split(separator: " ").map { ChannelMatcher.normalize(String($0)) }.filter { !$0.isEmpty }
+        let words = ChannelSearch.words(typed)
         let filtered = await Task.detached(priority: .userInitiated) { () -> [Channel] in
-            list.filter { ch in
-                let name = ChannelMatcher.normalize(ch.name)
-                return words.allSatisfy { name.contains($0) }
-            }
+            list.filter { ChannelSearch.matches(nameWords: ChannelSearch.words($0.name), queryWords: words) }
         }.value
         if !Task.isCancelled {
             rows = filtered
@@ -124,7 +129,7 @@ struct GroupPicker: View {
 
     private var categories: [ChannelCategory] {
         let counts = model.library.counts
-        let all = model.categories.filter { (counts[$0.id] ?? 0) > 0 }
+        let all = model.categories.filter { (counts[$0.id] ?? 0) > 0 && model.isGroupVisible($0.id) }
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return q.isEmpty ? all : all.filter { $0.name.lowercased().contains(q) }
     }

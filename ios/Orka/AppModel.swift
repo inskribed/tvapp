@@ -26,6 +26,7 @@ struct Library: Sendable {
     var categories: [ChannelCategory] = []
     var channels: [Channel] = []
     var normalizedNames: [String] = []
+    var words: [[String]] = []
     var counts: [String: Int] = [:]
 
     static func build(_ data: LiveData) -> Library {
@@ -35,6 +36,7 @@ struct Library: Sendable {
             categories: data.categories,
             channels: data.channels,
             normalizedNames: data.channels.map { ChannelMatcher.normalize($0.name) },
+            words: data.channels.map { ChannelSearch.words($0.name) },
             counts: counts
         )
     }
@@ -97,11 +99,17 @@ final class AppModel {
 
     // MARK: Live TV
     private(set) var library = Library()
+    /// Group (category) ids hidden in Settings > Channel groups, per playlist.
+    private(set) var hiddenGroups: Set<String> = []
+    /// Channels from groups that aren't hidden. Guide, Search and game matching all use this.
+    private(set) var visibleChannels: [Channel] = []
+    @ObservationIgnored private var visibleIndex: [Int] = []
     private(set) var channelsVersion = 0
     private(set) var liveSyncedAt: Date?
     private(set) var syncStates: [ContentKind: SyncState] = [.live: .idle, .movies: .idle, .series: .idle]
     private(set) var matcher: ChannelMatcher?
-    var channels: [Channel] { library.channels }
+    var channels: [Channel] { visibleChannels }
+    var allChannelCount: Int { library.channels.count }
     var categories: [ChannelCategory] { library.categories }
 
     // MARK: Favorites and recents
@@ -142,6 +150,9 @@ final class AppModel {
         showScores = store.showScores
         if let name = store.accentName, Brand.presets.contains(where: { $0.name == name }) { accentName = name }
         guideGroup = favorites.isEmpty ? Self.allGroup : Self.favoritesGroup
+        if let id = active?.id {
+            hiddenGroups = Set(store.load("hidden_groups_\(id)", as: [String].self) ?? [])
+        }
 
         player.urlProvider = { [weak self] channel in self?.streamURL(for: channel) }
         player.onTuned = { [weak self] channel in self?.noteWatched(channel) }
@@ -227,14 +238,28 @@ final class AppModel {
     private func apply(_ lib: Library, savedAt: Date) {
         library = lib
         liveSyncedAt = savedAt
+        refreshSnapshots()
+        rebuildVisible()
+    }
+
+    /// Recomputes the visible channels after a sync or a change to hidden groups.
+    private func rebuildVisible() {
+        let hidden = hiddenGroups
+        var idx: [Int] = []
+        idx.reserveCapacity(library.channels.count)
+        for (i, ch) in library.channels.enumerated() where !hidden.contains(ch.categoryId) { idx.append(i) }
+        visibleIndex = idx
+        visibleChannels = idx.map { library.channels[$0] }
+        if guideGroup != Self.allGroup && guideGroup != Self.favoritesGroup && hidden.contains(guideGroup) {
+            guideGroup = Self.allGroup
+        }
         channelsVersion += 1
         matchCache.removeAll()
         matcher = nil
-        refreshSnapshots()
 
         // Game-to-channel matching is prepared in the background; counts appear when it's ready.
         let version = channelsVersion
-        let list = lib.channels
+        let list = visibleChannels
         Task.detached(priority: .utility) { [weak self] in
             let built = ChannelMatcher(channels: list)
             await MainActor.run {
@@ -302,6 +327,9 @@ final class AppModel {
         activeID = id
         store.activeID = id
         library = Library()
+        visibleChannels = []
+        visibleIndex = []
+        hiddenGroups = Set(store.load("hidden_groups_\(id)", as: [String].self) ?? [])
         liveSyncedAt = nil
         account = nil
         epg.removeAll()
@@ -316,6 +344,7 @@ final class AppModel {
         playlists.removeAll { $0.id == id }
         store.savePlaylists(playlists)
         cache.remove(playlistId: id)
+        UserDefaults.standard.removeObject(forKey: "hidden_groups_\(id)")
         favorites.removeAll { $0.playlistId == id }
         recents.removeAll { $0.playlistId == id }
         favoriteIDs = Set(favorites.map(\.id))
@@ -328,6 +357,9 @@ final class AppModel {
                 activeID = nil
                 store.activeID = nil
                 library = Library()
+                visibleChannels = []
+                visibleIndex = []
+                hiddenGroups = []
                 liveSyncedAt = nil
                 account = nil
                 channelsVersion += 1
@@ -342,8 +374,8 @@ final class AppModel {
     func channels(inGroup id: String) -> [Channel] {
         switch id {
         case Self.favoritesGroup: return favorites
-        case Self.allGroup: return library.channels
-        default: return library.channels.filter { $0.categoryId == id }
+        case Self.allGroup: return visibleChannels
+        default: return visibleChannels.filter { $0.categoryId == id }
         }
     }
 
@@ -355,23 +387,42 @@ final class AppModel {
         }
     }
 
-    func search(_ query: String) -> [Channel] {
-        let q = ChannelMatcher.normalize(query)
-        if q.isEmpty { return [] }
-        let names = library.normalizedNames
-        let list = library.channels
-        var starts: [Channel] = []
-        var contains: [Channel] = []
-        for i in 0..<min(names.count, list.count) {
-            let n = names[i]
-            if n.hasPrefix(q) {
-                starts.append(list[i])
-            } else if n.contains(q) {
-                contains.append(list[i])
-            }
-            if starts.count >= 300 { break }
+    /// Whole-word search over visible channels ("|us|" finds |US| channels, not "Museum").
+    /// Runs off the main thread; the word lists were prepared when the channels loaded.
+    func search(_ query: String) async -> [Channel] {
+        let idx = visibleIndex
+        let lib = library
+        return await Task.detached(priority: .userInitiated) { () -> [Channel] in
+            let words = idx.map { lib.words[$0] }
+            let squashed = idx.map { lib.normalizedNames[$0] }
+            return ChannelSearch.search(query: query, words: words, squashed: squashed).map { lib.channels[idx[$0]] }
+        }.value
+    }
+
+    // MARK: Channel groups
+
+    /// Groups that have channels, in the provider's order.
+    var groupsWithChannels: [ChannelCategory] {
+        library.categories.filter { (library.counts[$0.id] ?? 0) > 0 }
+    }
+
+    func isGroupVisible(_ id: String) -> Bool { !hiddenGroups.contains(id) }
+
+    func setGroups(_ ids: [String], visible: Bool) {
+        if visible { hiddenGroups.subtract(ids) } else { hiddenGroups.formUnion(ids) }
+        if let id = active?.id { store.save(Array(hiddenGroups), key: "hidden_groups_\(id)") }
+        rebuildVisible()
+    }
+
+    /// Region tags found in group names ("US", "FR", ...) with their group ids, biggest first.
+    func groupPrefixes() -> [(tag: String, ids: [String])] {
+        var map: [String: [String]] = [:]
+        for c in groupsWithChannels {
+            if let tag = ChannelSearch.groupPrefix(c.name) { map[tag, default: []].append(c.id) }
         }
-        return Array((starts + contains).prefix(300))
+        return map.map { ($0.key, $0.value) }.sorted { a, b in
+            a.ids.count != b.ids.count ? a.ids.count > b.ids.count : a.tag < b.tag
+        }
     }
 
     // MARK: Favorites and recents

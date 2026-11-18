@@ -312,7 +312,7 @@ struct MiniPlayerBar: View {
         if let channel = model.player.current, !model.showPlayer {
             let player = model.player
             let now = model.nowNext(channel).now
-            HStack(spacing: 10) {
+            HStack(spacing: 4) {
                 Button {
                     model.showPlayer = true
                 } label: {
@@ -339,19 +339,27 @@ struct MiniPlayerBar: View {
                     player.togglePlay()
                 } label: {
                     Image(systemName: player.isPaused || player.failed ? "play.fill" : "pause.fill")
-                        .frame(width: 36, height: 36)
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(player.isPaused ? "Play" : "Pause")
 
                 Button {
                     model.stopPlayback()
                 } label: {
-                    Image(systemName: "xmark").frame(width: 36, height: 36)
+                    Image(systemName: "xmark")
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Stop")
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
             .glassEffect(.regular, in: .capsule)
             .padding(.horizontal, 12)
             .padding(.bottom, 6)

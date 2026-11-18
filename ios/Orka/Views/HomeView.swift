@@ -9,6 +9,15 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
+                    HStack(spacing: 10) {
+                        Image("orka_mark")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 30, height: 34)
+                        Text("Orka").font(.largeTitle.bold())
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                     sportsSection
                     channelSection(
                         title: "Recently watched",
@@ -33,15 +42,6 @@ struct HomeView: View {
             .refreshable { await model.refreshSports() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 8) {
-                        Image("orka_mark")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 27)
-                        Text("Orka").font(.title3.bold())
-                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         model.showSettings = true

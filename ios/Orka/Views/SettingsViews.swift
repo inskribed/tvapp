@@ -100,6 +100,16 @@ struct SettingsView: View {
             }
             Button("Sync Live TV now") { Task { await model.refreshLive() } }
                 .disabled(model.syncStates[.live] == .syncing)
+            NavigationLink {
+                ChannelGroupsView()
+            } label: {
+                LabeledContent("Channel groups") {
+                    let total = model.groupsWithChannels.count
+                    let shown = model.groupsWithChannels.filter { model.isGroupVisible($0.id) }.count
+                    Text(shown == total ? "All shown" : "\(shown) of \(total) shown")
+                }
+            }
+            .disabled(model.allChannelCount == 0)
             LabeledContent("Movies") { Text("Coming soon").foregroundStyle(.secondary) }
             LabeledContent("Series") { Text("Coming soon").foregroundStyle(.secondary) }
         } header: {
@@ -307,5 +317,100 @@ struct WelcomeView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(OrkaBackground())
+    }
+}
+
+/// Show or hide whole channel groups. Hidden groups disappear from the Guide, Search and the
+/// channels suggested for games. Favorites and recently watched aren't affected.
+struct ChannelGroupsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var search = ""
+
+    var body: some View {
+        let groups = model.groupsWithChannels
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shown = q.isEmpty ? groups : groups.filter {
+            ChannelSearch.matches(nameWords: ChannelSearch.words($0.name), queryWords: ChannelSearch.words(q))
+        }
+        List {
+            if q.isEmpty {
+                let prefixes = model.groupPrefixes()
+                if !prefixes.isEmpty {
+                    Section {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+                            ForEach(prefixes, id: \.tag) { p in
+                                prefixChip(p.tag, ids: p.ids)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    } header: {
+                        Text("By country")
+                    } footer: {
+                        Text("Tap a tag to show or hide all of its groups. To keep only one country, choose Hide all from the menu, then tap its tag.")
+                    }
+                }
+            }
+            Section(q.isEmpty ? "Groups" : "Matching groups") {
+                ForEach(shown) { c in
+                    Toggle(isOn: Binding(
+                        get: { model.isGroupVisible(c.id) },
+                        set: { model.setGroups([c.id], visible: $0) }
+                    )) {
+                        HStack {
+                            Text(c.name).lineLimit(1)
+                            Spacer()
+                            Text("\(model.library.counts[c.id] ?? 0)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(OrkaBackground())
+        .navigationTitle("Channel groups")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: "Find a group")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Show all") { model.setGroups(groups.map(\.id), visible: true) }
+                    Button("Hide all", role: .destructive) { model.setGroups(groups.map(\.id), visible: false) }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+    }
+
+    /// Filled = all shown, outlined = some shown, dim = all hidden.
+    private func prefixChip(_ tag: String, ids: [String]) -> some View {
+        let visibleCount = ids.filter { model.isGroupVisible($0) }.count
+        let all = visibleCount == ids.count
+        let none = visibleCount == 0
+        return Button {
+            model.setGroups(ids, visible: none)
+        } label: {
+            VStack(spacing: 2) {
+                Text(tag).font(.headline)
+                Text("\(ids.count) group\(ids.count == 1 ? "" : "s")").font(.caption2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .foregroundStyle(all ? Color.black : (none ? Color.secondary : Color.primary))
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(all ? model.accent : Color.white.opacity(none ? 0.04 : 0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(none ? Color.clear : model.accent.opacity(all ? 0 : 0.8), lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(tag), \(none ? "hidden" : (all ? "shown" : "partly shown"))")
     }
 }
