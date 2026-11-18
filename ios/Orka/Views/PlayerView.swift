@@ -62,8 +62,8 @@ struct PlayerView: View {
                         } else if showInfo {
                             withAnimation(.snappy) { showInfo = false }
                         } else {
-                            // Swipe down: keep watching in picture in picture.
-                            goToPictureInPicture()
+                            // Swipe down: same as the ⌄ button, keep watching in the mini player.
+                            model.showPlayer = false
                         }
                     }
                 )
@@ -164,7 +164,7 @@ struct PlayerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .glassCard(cornerRadius: 20)
                     }
-                    Text("Swipe up for info  ·  Swipe down for picture in picture")
+                    Text("Swipe up for info  ·  Swipe down to minimize")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 16)

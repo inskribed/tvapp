@@ -166,11 +166,48 @@ struct SettingsView: View {
         }
     }
 
+    /// The brand lives here (not on Home): logo, name and version on a glass card.
     private var aboutSection: some View {
-        Section("About") {
-            let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-            let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-            LabeledContent("Version", value: "\(v) (\(b))")
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return Section("About") {
+            VStack(spacing: 10) {
+                ZStack {
+                    // Soft teal-and-lime glow behind the mark.
+                    Circle()
+                        .fill(RadialGradient(colors: [model.accent.opacity(0.45), .clear], center: .center, startRadius: 4, endRadius: 70))
+                        .frame(width: 140, height: 140)
+                    Circle()
+                        .fill(RadialGradient(colors: [model.highlight.opacity(0.18), .clear], center: .bottomLeading, startRadius: 2, endRadius: 60))
+                        .frame(width: 140, height: 140)
+                    Image("orka_mark")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 72, height: 81)
+                        .shadow(color: model.accent.opacity(0.5), radius: 12)
+                }
+                .frame(height: 112)
+                Text("Orka")
+                    .font(.largeTitle.bold())
+                Text("Live TV, your guide and every game, in one place.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Text("Version \(v) (\(b))")
+                    .font(.caption.weight(.medium))
+                    .monospacedDigit()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 12)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            .accessibilityElement(children: .combine)
         }
     }
 }

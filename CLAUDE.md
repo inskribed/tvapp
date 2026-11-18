@@ -99,8 +99,9 @@ on phone: group tiles at the top select a group, same as the Groups sheet; "All 
 with a pinned glass header per shown group), Sports, Favorites, Search; Settings is a sheet from Home.
 Touch and hold = favorite. Player: bottom row is CH− · back 15s · play/pause · ahead 15s · CH+ (seek
 stays within the stream's buffer); swipe up = stream info panel (now/next, picture size, bitrate);
-swipe down = picture in picture (full screen closes when PiP starts; PiP "back to app" reopens it;
-closing the PiP window stops the stream; falls back to the mini bar if PiP isn't possible).
+swipe down = same as the ⌄ button (close to the mini bar). PiP is the top-right button (full screen
+closes when PiP starts; PiP "back to app" reopens it; closing the PiP window stops the stream).
+The brand (logo, name, version) lives in Settings > About, not on Home.
 Back out of the player = mini player bar above the tab bar. Long lists use light `listPanel`
 instead of glass for smoothness; glass is for cards, controls and the mini player.
 
