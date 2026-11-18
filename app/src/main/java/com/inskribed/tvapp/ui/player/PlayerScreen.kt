@@ -72,8 +72,7 @@ import okhttp3.OkHttpClient
 private const val MAX_RETRIES = 6
 
 @OptIn(UnstableApi::class)
-private fun buildPlayer(context: Context, http: OkHttpClient): ExoPlayer {
-    val dataSource = OkHttpDataSource.Factory(http).setUserAgent(USER_AGENT)
+private fun buildPlayer(context: Context, dataSource: OkHttpDataSource.Factory): ExoPlayer {
     val mediaSources = DefaultMediaSourceFactory(context).setDataSourceFactory(dataSource)
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(20_000, 60_000, 1_500, 3_000)
@@ -93,7 +92,9 @@ fun PlayerScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
     val mini = vm.playerMini
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val player = remember { buildPlayer(context, vm.http) }
+    // Kept so each channel can set its own connection details (some M3U channels need them).
+    val dataSource = remember { OkHttpDataSource.Factory(vm.http).setUserAgent(USER_AGENT) }
+    val player = remember { buildPlayer(context, dataSource) }
     val focus = remember { FocusRequester() }
 
     var status by remember { mutableStateOf("") }
@@ -127,6 +128,9 @@ fun PlayerScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
             status = "This channel's playlist is missing."
             return
         }
+        val (userAgent, headers) = vm.streamHeaders(channel)
+        dataSource.setUserAgent(userAgent ?: USER_AGENT)
+        dataSource.setDefaultRequestProperties(headers)
         player.setMediaItem(item)
         player.prepare()
         player.playWhenReady = true

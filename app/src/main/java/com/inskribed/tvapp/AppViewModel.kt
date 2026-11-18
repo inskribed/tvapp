@@ -39,6 +39,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -206,6 +207,51 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Playlists -------------------------------------------------------
 
+    /** Adds an M3U playlist (Free-TV, iptv-org, HDHomeRun, Plex...). It's downloaded once to check it. */
+    fun addM3uPlaylist(name: String, link: String, guideLink: String, onResult: (String?) -> Unit) {
+        if (link.isBlank()) {
+            onResult("Please enter the playlist link.")
+            return
+        }
+        viewModelScope.launch {
+            val url = client.normalizeLink(link)
+            val p = Playlist(
+                id = UUID.randomUUID().toString().take(8),
+                name = name.trim().ifBlank { url.toHttpUrlOrNull()?.host ?: "Playlist ${playlists.size + 1}" },
+                server = url,
+                username = "",
+                password = "",
+                kind = Playlist.KIND_M3U,
+                epgUrl = guideLink.trim().takeIf { it.isNotEmpty() }?.let { client.normalizeLink(it) },
+            )
+            try {
+                val result = repo.fetchM3u(p)
+                if (result.data.channels.isEmpty()) {
+                    onResult("That playlist has no channels Orka can play.")
+                    return@launch
+                }
+                // The playlist may name its own guide; keep it for when guide support arrives.
+                val saved = if (p.epgUrl == null && result.guideUrls.isNotEmpty()) p.copy(epgUrl = result.guideUrls.first()) else p
+                playlists = playlists + saved
+                prefs.savePlaylists(playlists)
+                showAddPlaylist = false
+                account = null
+                setActive(saved.id)
+                onResult(null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onResult("Couldn't load that playlist: ${friendly(e)}")
+            }
+        }
+    }
+
+    /** Extra connection details some M3U channels need (iptv-org lists name them per channel). */
+    fun streamHeaders(ch: Channel): Pair<String?, Map<String, String>> {
+        val headers = ch.referrer?.takeIf { it.isNotBlank() }?.let { mapOf("Referer" to it) } ?: emptyMap()
+        return ch.userAgent?.takeIf { it.isNotBlank() } to headers
+    }
+
     fun addPlaylist(name: String, server: String, username: String, password: String, onResult: (String?) -> Unit) {
         if (server.isBlank() || username.isBlank() || password.isBlank()) {
             onResult("Please fill in the server, username and password.")
@@ -282,7 +328,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch {
             loadError = null
             if (!force) repo.loadCached(p)?.let { apply(it) }
-            val age = repo.cacheAgeMs(p.id)
+            val age = repo.cacheAgeMs(p)
             if (force || channels.isEmpty() || age == null || age > REFRESH_AFTER_MS) {
                 loading = true
                 try {
@@ -295,7 +341,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     loading = false
                 }
             }
-            try {
+            // Account details (status, expiry, connections) only exist for Xtream logins.
+            if (!p.isM3u) try {
                 account = client.authenticate(p)
             } catch (e: CancellationException) {
                 throw e
@@ -452,6 +499,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun ensureEpg(ch: Channel) {
         if (ch.epgId.isNullOrBlank()) return
         val p = playlists.find { it.id == ch.playlistId } ?: return
+        // M3U playlists don't have Xtream's per-channel guide; their guide (XMLTV) comes next.
+        if (p.isM3u) return
         fun fresh(e: EpgEntry?): Boolean {
             if (e == null) return false
             val age = System.currentTimeMillis() - e.fetchedMs
@@ -634,6 +683,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun mediaItem(ch: Channel): MediaItem? {
+        ch.url?.let { url ->
+            // M3U channels: let the player work out the format, with a hint for the common ones.
+            val lower = url.substringBefore('?').lowercase()
+            val mime = when {
+                lower.endsWith(".m3u8") -> MimeTypes.APPLICATION_M3U8
+                lower.endsWith(".mpd") -> MimeTypes.APPLICATION_MPD
+                else -> null
+            }
+            return MediaItem.Builder().setUri(url).apply { if (mime != null) setMimeType(mime) }.build()
+        }
         val p = playlists.find { it.id == ch.playlistId } ?: return null
         val url = client.streamUrl(p, ch, streamFormat)
         return MediaItem.Builder()

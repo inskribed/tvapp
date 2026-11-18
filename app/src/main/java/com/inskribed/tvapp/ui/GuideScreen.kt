@@ -97,7 +97,7 @@ fun formatTime(ms: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(
 fun GuideScreen(vm: AppViewModel) {
     when {
         vm.playlists.isEmpty() -> {
-            CenterMessage("No playlist yet", "Add your Xtream Codes login to see the guide.") {
+            CenterMessage("No playlist yet", "Add an Xtream login or an M3U playlist link to see the guide.") {
                 TvButton("Add playlist", onClick = { vm.showAddPlaylist = true })
             }
             return

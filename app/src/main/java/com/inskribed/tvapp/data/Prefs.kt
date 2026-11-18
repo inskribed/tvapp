@@ -20,6 +20,8 @@ class Prefs(context: Context) {
                     server = o.getString("server"),
                     username = o.getString("username"),
                     password = o.getString("password"),
+                    kind = o.optString("kind", Playlist.KIND_XTREAM).ifEmpty { Playlist.KIND_XTREAM },
+                    epgUrl = o.optString("epgUrl").takeIf { it.isNotEmpty() },
                 )
             }
         }.getOrDefault(emptyList())
@@ -35,6 +37,8 @@ class Prefs(context: Context) {
                     .put("server", p.server)
                     .put("username", p.username)
                     .put("password", p.password)
+                    .put("kind", p.kind)
+                    .put("epgUrl", p.epgUrl ?: "")
             )
         }
         sp.edit().putString(KEY_PLAYLISTS, arr.toString()).apply()

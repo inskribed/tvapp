@@ -186,7 +186,7 @@ fun SettingsScreen(vm: AppViewModel) {
             SettingToggle(
                 title = "Stream format",
                 value = if (vm.streamFormat == "m3u8") "HLS (.m3u8)" else "MPEG-TS (.ts)",
-                hint = "Switch if channels won't start or keep stuttering.",
+                hint = "For Xtream logins. Switch if channels won't start or keep stuttering.",
                 onClick = { vm.updateStreamFormat(if (vm.streamFormat == "m3u8") "ts" else "m3u8") },
             )
         }
@@ -244,15 +244,17 @@ private fun SettingToggle(title: String, value: String, hint: String, onClick: (
 
 @Composable
 fun AddPlaylistScreen(vm: AppViewModel) {
+    var m3u by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var server by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
+    var link by rememberSaveable { mutableStateOf("") }
+    var guide by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
-    val canCancel = true
-    androidx.activity.compose.BackHandler(enabled = canCancel) { vm.showAddPlaylist = false }
+    androidx.activity.compose.BackHandler { vm.showAddPlaylist = false }
 
     LaunchedEffect(Unit) {
         delay(100)
@@ -263,42 +265,85 @@ fun AddPlaylistScreen(vm: AppViewModel) {
         if (busy) return
         busy = true
         error = null
-        vm.addPlaylist(name, server, user, pass) { err ->
+        val done: (String?) -> Unit = { err ->
             busy = false
             error = err
         }
+        if (m3u) vm.addM3uPlaylist(name, link, guide, done) else vm.addPlaylist(name, server, user, pass, done)
     }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(620.dp)) {
+        Column(Modifier.width(680.dp)) {
             ScreenTitle(
                 "Add a playlist",
-                "Enter the Xtream Codes login from your provider.",
+                if (m3u) "Paste or type an M3U playlist link from a legal source." else "Enter the Xtream login from your provider.",
             )
-            TvTextField(name, { name = it }, "Name (optional)", Modifier.fillMaxWidth().focusRequester(first),
-                placeholder = "My provider")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton(
+                    (if (!m3u) "✓ " else "") + "Xtream login",
+                    onClick = { m3u = false; error = null },
+                    modifier = Modifier.focusRequester(first),
+                )
+                TvButton((if (m3u) "✓ " else "") + "M3U link", onClick = { m3u = true; error = null })
+            }
+            Spacer(Modifier.height(18.dp))
+            TvTextField(name, { name = it }, "Name (optional)", Modifier.fillMaxWidth(),
+                placeholder = if (m3u) "Free TV" else "My provider")
             Spacer(Modifier.height(14.dp))
-            TvTextField(server, { server = it }, "Server URL", Modifier.fillMaxWidth(),
-                placeholder = "http://example.com:8080", keyboardType = KeyboardType.Uri)
-            Spacer(Modifier.height(14.dp))
-            TvTextField(user, { user = it }, "Username", Modifier.fillMaxWidth())
-            Spacer(Modifier.height(14.dp))
-            TvTextField(pass, { pass = it }, "Password", Modifier.fillMaxWidth(), password = true,
-                imeAction = ImeAction.Done, onDone = { submit() })
+            if (m3u) {
+                TvTextField(link, { link = it }, "Playlist link", Modifier.fillMaxWidth(),
+                    placeholder = "https://example.com/playlist.m3u", keyboardType = KeyboardType.Uri)
+                Spacer(Modifier.height(14.dp))
+                TvTextField(guide, { guide = it }, "Guide link (optional)", Modifier.fillMaxWidth(),
+                    placeholder = "https://example.com/guide.xml", keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done, onDone = { submit() })
+                Spacer(Modifier.height(14.dp))
+                Text("Free and legal to try", fontSize = 14.sp, color = AppColors.TextDim)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FREE_SOURCES.forEach { (label, url) ->
+                        TvButton(label, onClick = {
+                            link = url
+                            if (name.isBlank() || FREE_SOURCES.any { it.first == name }) name = label
+                        })
+                    }
+                }
+            } else {
+                TvTextField(server, { server = it }, "Server URL", Modifier.fillMaxWidth(),
+                    placeholder = "http://example.com:8080", keyboardType = KeyboardType.Uri)
+                Spacer(Modifier.height(14.dp))
+                TvTextField(user, { user = it }, "Username", Modifier.fillMaxWidth())
+                Spacer(Modifier.height(14.dp))
+                TvTextField(pass, { pass = it }, "Password", Modifier.fillMaxWidth(), password = true,
+                    imeAction = ImeAction.Done, onDone = { submit() })
+            }
             Spacer(Modifier.height(22.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                TvButton(if (busy) "Connecting…" else "Save and connect", onClick = { submit() })
-                if (canCancel) TvButton("Cancel", onClick = { vm.showAddPlaylist = false })
+                TvButton(
+                    if (busy) (if (m3u) "Loading playlist…" else "Connecting…") else "Save and connect",
+                    onClick = { submit() },
+                )
+                TvButton("Cancel", onClick = { vm.showAddPlaylist = false })
             }
             error?.let {
                 Spacer(Modifier.height(14.dp))
                 Text(it, color = AppColors.Danger, fontSize = 15.sp)
             }
             Spacer(Modifier.height(22.dp))
-            DimText("Tip: the Google TV app on your phone can act as a keyboard for this screen.")
+            DimText(
+                if (m3u) "M3U links come from legal sources like Free-TV, iptv-org, an HDHomeRun or a Plex/Jellyfin server."
+                else "Tip: the Google TV app on your phone can act as a keyboard for this screen."
+            )
         }
     }
 }
+
+/** Free, legal playlists for trying Orka out (same list as the iPhone app). */
+private val FREE_SOURCES = listOf(
+    "Free-TV" to "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8",
+    "iptv-org (US)" to "https://iptv-org.github.io/iptv/countries/us.m3u",
+    "iptv-org (all)" to "https://iptv-org.github.io/iptv/index.m3u",
+)
 
 @Composable
 fun UpdateScreen(vm: AppViewModel) {

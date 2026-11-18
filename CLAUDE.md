@@ -109,6 +109,23 @@ instead of glass for smoothness; glass is for cards, controls and the mini playe
 signing + `fastlane`/`xcodebuild archive` workflow), Inter font (iOS uses the system font),
 Movies/Series, program search, widgets.
 
+## Playlist types: Xtream and M3U (both apps)
+
+- Xtream (`kind = "xtream"`, server/username/password) and **M3U links** for legal sources
+  (`kind = "m3u"` on Android with the link in `server`; `m3uURL` set on iOS). Owner's test sources:
+  Free-TV (`raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8`) and iptv-org
+  (`iptv-org.github.io/iptv/...` — that host is blocked from the cloud sandbox; its raw files on
+  raw.githubusercontent.com/iptv-org/iptv/master/streams/*.m3u are reachable for testing).
+- Parser: `ios/OrkaCore/.../M3UParser.swift` (unit-tested) and `data/M3uParser.kt` (same rules —
+  change both). group-title (first of "A;B") → #EXTGRP → tvg-country → country from tvg-id → "Other";
+  #EXTVLCOPT http-user-agent / http-referrer kept per channel and sent when playing; YouTube/Twitch
+  pages and non-URLs skipped; channel id = "m" + 12 hex of SHA-1(url) so favorites survive refreshes.
+- M3U playlists: no account info, no Xtream short EPG (guide = XMLTV, the next step; the guide link
+  from `url-tvg`/`x-tvg-url` or the user is already saved as `epgUrl`). Android caches the raw text
+  (`cache_<id>_m3u.json`); iOS caches the parsed list like Xtream. Android plays HLS/TS/DASH (dash
+  module added); iPhone plays HLS only.
+- Add playlist has one-tap Free-TV / iptv-org buttons (`FREE_SOURCES` / `freeSources`).
+
 ## Product decisions already made
 
 - App opens to the TV Guide (the old Live TV list section was removed; the guide's List view

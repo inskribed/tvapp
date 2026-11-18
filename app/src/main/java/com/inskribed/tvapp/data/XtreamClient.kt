@@ -37,6 +37,18 @@ class XtreamClient(private val http: OkHttpClient) {
             .build()
     }
 
+    /** Plain download, for M3U playlist links. */
+    suspend fun fetchText(url: String): String {
+        val u = url.toHttpUrlOrNull() ?: throw IOException("The link doesn't look right")
+        return get(u)
+    }
+
+    /** "example.com/list.m3u" -> "http://example.com/list.m3u" */
+    fun normalizeLink(raw: String): String {
+        val s = raw.trim()
+        return if (s.startsWith("http://", true) || s.startsWith("https://", true)) s else "http://$s"
+    }
+
     private suspend fun get(url: HttpUrl): String = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
         http.newCall(req).execute().use { resp ->
