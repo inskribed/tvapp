@@ -21,6 +21,9 @@ import com.inskribed.tvapp.data.Prefs
 import com.inskribed.tvapp.data.Repository
 import com.inskribed.tvapp.data.XtreamClient
 import com.inskribed.tvapp.data.ChannelMatcher
+import com.inskribed.tvapp.data.ChannelSearch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.inskribed.tvapp.data.Game
 import com.inskribed.tvapp.data.GameState
 import com.inskribed.tvapp.data.League
@@ -88,8 +91,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // Channels
     var categories by mutableStateOf<List<Category>>(emptyList())
         private set
+    /** Channels from groups that aren't hidden. Guide, Search and game matching all use this. */
     var channels by mutableStateOf<List<Channel>>(emptyList())
         private set
+    /** Every channel from the provider, hidden groups included (favorites use this). */
+    var allChannels by mutableStateOf<List<Channel>>(emptyList())
+        private set
+    /** Group ids hidden in Settings > Channel groups (saved per playlist). */
+    var hiddenGroups by mutableStateOf<Set<String>>(emptySet())
+        private set
+    /** Channel count per group, over all channels. */
+    var groupCounts by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+    var showGroupPicker by mutableStateOf(false)
+    private var searchIndexFor: List<Channel>? = null
+    private var searchWords: List<List<String>> = emptyList()
+    private var searchSquashed: List<String> = emptyList()
     var loading by mutableStateOf(false)
         private set
     var loadError by mutableStateOf<String?>(null)
@@ -173,6 +190,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         prefs.accentColor.takeIf { it != 0 }?.let { AppColors.setAccent(Color(it)) }
+        active?.id?.let { hiddenGroups = prefs.hiddenGroups(it) }
         loadActive()
         checkForUpdate(manual = false)
     }
@@ -219,6 +237,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.activePlaylistId = id
         categories = emptyList()
         channels = emptyList()
+        allChannels = emptyList()
+        groupCounts = emptyMap()
+        hiddenGroups = prefs.hiddenGroups(id)
         account = null
         epg.clear()
         loadActive()
@@ -228,6 +249,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         playlists = playlists.filterNot { it.id == id }
         prefs.savePlaylists(playlists)
         repo.clear(id)
+        prefs.clearHiddenGroups(id)
         favorites = favorites.filterNot { it.startsWith("$id:") }
         prefs.saveFavorites(favorites)
         if (activeId == id || playlists.none { it.id == activeId }) {
@@ -237,6 +259,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.activePlaylistId = null
                 categories = emptyList()
                 channels = emptyList()
+                allChannels = emptyList()
+                groupCounts = emptyMap()
+                hiddenGroups = emptySet()
                 account = null
             }
         }
@@ -274,7 +299,54 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun apply(data: LiveData) {
         categories = data.categories
-        channels = data.channels
+        allChannels = data.channels
+        groupCounts = data.channels.groupingBy { it.categoryId }.eachCount()
+        rebuildVisible()
+    }
+
+    private fun rebuildVisible() {
+        val hidden = hiddenGroups
+        val visible = if (hidden.isEmpty()) allChannels else allChannels.filter { it.categoryId !in hidden }
+        channels = visible
+        if (guideCategory != ALL_CATEGORIES && guideCategory != FAVORITES_CATEGORY && guideCategory in hidden) {
+            guideCategory = ALL_CATEGORIES
+        }
+        // Search words are prepared in the background so typing stays quick.
+        viewModelScope.launch(Dispatchers.Default) {
+            val words = visible.map { ChannelSearch.words(it.name) }
+            val squashed = visible.map { ChannelMatcher.normalize(it.name) }
+            withContext(Dispatchers.Main) {
+                if (channels === visible) {
+                    searchWords = words
+                    searchSquashed = squashed
+                    searchIndexFor = visible
+                }
+            }
+        }
+    }
+
+    // ---- Channel groups --------------------------------------------------
+
+    /** Groups that have channels, in the provider's order. */
+    fun groupsWithChannels(): List<Category> = categories.filter { (groupCounts[it.id] ?: 0) > 0 }
+
+    fun isGroupVisible(id: String) = id !in hiddenGroups
+
+    fun setGroups(ids: Collection<String>, visible: Boolean) {
+        hiddenGroups = if (visible) hiddenGroups - ids.toSet() else hiddenGroups + ids
+        active?.id?.let { prefs.saveHiddenGroups(it, hiddenGroups) }
+        rebuildVisible()
+    }
+
+    /** Region tags found in group names ("US", "FR", ...) with their group ids, biggest first. */
+    fun groupPrefixes(): List<Pair<String, List<String>>> {
+        val map = LinkedHashMap<String, MutableList<String>>()
+        for (c in groupsWithChannels()) {
+            val tag = ChannelSearch.groupPrefix(c.name) ?: continue
+            map.getOrPut(tag) { ArrayList() }.add(c.id)
+        }
+        return map.entries.map { it.key to it.value.toList() }
+            .sortedWith(compareByDescending<Pair<String, List<String>>> { it.second.size }.thenBy { it.first })
     }
 
     private fun friendly(e: Exception): String = when (e) {
@@ -465,26 +537,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun favoriteChannels(): List<Channel> {
-        val byKey = channels.associateBy { it.key }
+        val byKey = allChannels.associateBy { it.key }
         return favorites.mapNotNull { byKey[it] }
     }
 
     // ---- Search ----------------------------------------------------------
 
+    /** Whole-word search over visible channels ("|us|" finds |US| channels, not "Museum"). */
     fun search(query: String): List<Channel> {
-        val q = normalize(query)
-        if (q.isEmpty()) return emptyList()
-        val starts = ArrayList<Channel>()
-        val contains = ArrayList<Channel>()
-        for (ch in channels) {
-            val n = normalize(ch.name)
-            when {
-                n.startsWith(q) -> starts += ch
-                n.contains(q) -> contains += ch
-            }
-            if (starts.size >= 300) break
+        val list = channels
+        if (searchIndexFor !== list) {
+            searchWords = list.map { ChannelSearch.words(it.name) }
+            searchSquashed = list.map { ChannelMatcher.normalize(it.name) }
+            searchIndexFor = list
         }
-        return (starts + contains).take(300)
+        return ChannelSearch.search(query, searchWords, searchSquashed).map { list[it] }
     }
 
     private fun normalize(s: String) = buildString(s.length) {
@@ -514,12 +581,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun filterChannels(list: List<Channel>, filter: String): List<Channel> {
-        val words = filter.trim().split(' ').map { normalize(it) }.filter { it.isNotEmpty() }
+        val words = ChannelSearch.words(filter)
         if (words.isEmpty()) return list
-        return list.filter { ch ->
-            val n = normalize(ch.name)
-            words.all { n.contains(it) }
-        }
+        return list.filter { ChannelSearch.matches(ChannelSearch.words(it.name), words) }
     }
 
     fun updateInvertKeys(value: Boolean) {

@@ -93,6 +93,25 @@ class Prefs(context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    /** Channel group ids hidden in Settings > Channel groups, per playlist. */
+    fun hiddenGroups(playlistId: String): Set<String> {
+        val raw = sp.getString("hidden_groups_$playlistId", null) ?: return emptySet()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }.toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    fun saveHiddenGroups(playlistId: String, ids: Set<String>) {
+        val arr = JSONArray()
+        ids.forEach { arr.put(it) }
+        sp.edit().putString("hidden_groups_$playlistId", arr.toString()).apply()
+    }
+
+    fun clearHiddenGroups(playlistId: String) {
+        sp.edit().remove("hidden_groups_$playlistId").apply()
+    }
+
     fun saveFavoriteTeams(keys: List<String>) {
         val arr = JSONArray()
         keys.forEach { arr.put(it) }

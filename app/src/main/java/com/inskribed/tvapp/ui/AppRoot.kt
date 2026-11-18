@@ -77,10 +77,11 @@ fun AppRoot(vm: AppViewModel) {
             vm.showUpdatePrompt && vm.update != null && vm.currentChannel == null -> UpdateScreen(vm)
             vm.showAddPlaylist -> AddPlaylistScreen(vm)
             vm.showTeamPicker -> TeamPickerScreen(vm)
+            vm.showGroupPicker -> ChannelGroupsScreen(vm)
             vm.gameDetail != null -> GameDetailScreen(vm)
             else -> MainScreen(vm)
         }
-        if (vm.currentChannel != null && !vm.showAddPlaylist && !vm.showTeamPicker) {
+        if (vm.currentChannel != null && !vm.showAddPlaylist && !vm.showTeamPicker && !vm.showGroupPicker) {
             val mod = if (vm.playerMini) {
                 Modifier
                     .align(Alignment.TopEnd)

@@ -119,6 +119,18 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
         item {
+            val groups = vm.groupsWithChannels()
+            val shown = groups.count { vm.isGroupVisible(it.id) }
+            Column(Modifier.padding(top = 8.dp)) {
+                SettingToggle(
+                    title = "Channel groups",
+                    value = if (shown == groups.size) "All shown" else "$shown of ${groups.size} shown",
+                    hint = "Hide groups you don't watch, like other countries. They disappear from the guide, search and sports.",
+                    onClick = { if (groups.isNotEmpty()) vm.showGroupPicker = true },
+                )
+            }
+        }
+        item {
             val a = vm.account
             if (a != null) {
                 val parts = buildList {

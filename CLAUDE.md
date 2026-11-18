@@ -82,7 +82,8 @@ ignores `ios/**` and `design/**`.
   match "Museum". Hidden channel groups (Settings > Library > Channel groups, per playlist in
   UserDefaults `hidden_groups_<playlistId>`, quick "by country" tags from `groupPrefix`) are
   removed from `visibleChannels`, which Guide, Search and the game matcher use; favorites/recents
-  keep them. Android still has the old squashed search and no group hiding (parity TODO).
+  keep them. Android matches: `data/ChannelSearch.kt` (same rules) and `ui/ChannelGroupsScreen.kt`
+  (Settings > Channel groups; `vm.channels` = visible, `vm.allChannels` = everything).
 - Language mode is Swift 5 on purpose (fewer strict-concurrency errors without a local compiler).
 - Avoid type names that clash with system types (`Category` did; it's `ChannelCategory`).
 
