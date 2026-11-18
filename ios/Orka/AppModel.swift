@@ -155,14 +155,25 @@ final class AppModel {
         }
 
         player.urlProvider = { [weak self] channel in self?.streamURL(for: channel) }
+        player.headersProvider = { [weak self] channel in self?.streamHeaders(for: channel) ?? [:] }
         player.onTuned = { [weak self] channel in self?.noteWatched(channel) }
         player.onPictureInPictureStarted = { [weak self] in self?.showPlayer = false }
         player.onRestoreFromPictureInPicture = { [weak self] in self?.showPlayer = true }
     }
 
     private func streamURL(for channel: Channel) -> URL? {
+        // M3U channels carry their own address.
+        if let s = channel.url { return URL(string: s) }
         guard let p = playlists.first(where: { $0.id == channel.playlistId }) else { return nil }
         return XtreamClient.streamURL(p, channel)
+    }
+
+    /// Extra connection details some M3U channels need (iptv-org lists name them per channel).
+    private func streamHeaders(for channel: Channel) -> [String: String] {
+        var h: [String: String] = [:]
+        if let ua = channel.userAgent, !ua.isEmpty { h["User-Agent"] = ua }
+        if let ref = channel.referrer, !ref.isEmpty { h["Referer"] = ref }
+        return h
     }
 
     // MARK: Launch
@@ -226,7 +237,12 @@ final class AppModel {
         let cache = self.cache
         do {
             let lib = try await Task.detached(priority: .userInitiated) { () async throws -> Library in
-                let data = try await client.fetchLive(p)
+                let data: LiveData
+                if p.isM3U {
+                    data = try await client.fetchM3U(p).data
+                } else {
+                    data = try await client.fetchLive(p)
+                }
                 cache.save(data, playlistId: p.id)
                 return Library.build(data)
             }.value
@@ -279,7 +295,11 @@ final class AppModel {
     }
 
     func refreshAccount() async {
-        guard let p = active else { return }
+        // Account details (status, expiry, connections) only exist for Xtream logins.
+        guard let p = active, !p.isM3U else {
+            account = nil
+            return
+        }
         account = try? await xtream.authenticate(p)
     }
 
@@ -322,6 +342,40 @@ final class AppModel {
             return nil
         } catch {
             return "Couldn't connect: \(friendly(error))"
+        }
+    }
+
+    /// Adds an M3U playlist (Free-TV, iptv-org, HDHomeRun, Plex...). It's downloaded once to check it.
+    func addM3UPlaylist(name: String, link: String, guideLink: String) async -> String? {
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "Please enter the playlist link." }
+        let url = XtreamClient.normalizeLink(trimmed)
+        let guide = guideLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = String(UUID().uuidString.prefix(8)).lowercased()
+        let playlist = Playlist(
+            id: id,
+            name: n.isEmpty ? (URL(string: url)?.host ?? "Playlist \(playlists.count + 1)") : n,
+            server: url,
+            username: "",
+            password: "",
+            m3uURL: url,
+            epgURL: guide.isEmpty ? nil : XtreamClient.normalizeLink(guide)
+        )
+        do {
+            let result = try await xtream.fetchM3U(playlist)
+            if result.data.channels.isEmpty { return "That playlist has no channels Orka can play." }
+            var saved = playlist
+            // The playlist may name its own guide; keep it for when guide support arrives.
+            if saved.epgURL == nil, let g = result.guideURLs.first { saved.epgURL = g }
+            cache.save(result.data, playlistId: saved.id)
+            playlists.append(saved)
+            store.savePlaylists(playlists)
+            account = nil
+            setActive(saved.id)
+            return nil
+        } catch {
+            return "Couldn't load that playlist: \(friendly(error))"
         }
     }
 
@@ -483,8 +537,9 @@ final class AppModel {
 
     /// Loads guide data for one channel when it's missing or stale. At most 4 requests run at once.
     func ensureEpg(_ ch: Channel) async {
+        // M3U playlists don't have Xtream's per-channel guide; their guide (XMLTV) comes in the next step.
         guard let eid = ch.epgId, !eid.isEmpty,
-              let p = playlists.first(where: { $0.id == ch.playlistId }) else { return }
+              let p = playlists.first(where: { $0.id == ch.playlistId }), !p.isM3U else { return }
         if isFresh(epg[ch.id]) { return }
         await limiter.acquire()
         if Task.isCancelled || isFresh(epg[ch.id]) {

@@ -21,6 +21,7 @@ final class PlayerModel {
 
     @ObservationIgnored let avPlayer = AVPlayer()
     @ObservationIgnored var urlProvider: (@MainActor (Channel) -> URL?)?
+    @ObservationIgnored var headersProvider: (@MainActor (Channel) -> [String: String])?
     @ObservationIgnored var onTuned: (@MainActor (Channel) -> Void)?
     /// Picture in picture took over: close the full screen player.
     @ObservationIgnored var onPictureInPictureStarted: (@MainActor () -> Void)?
@@ -267,7 +268,12 @@ final class PlayerModel {
             status = "This channel's playlist is missing."
             return
         }
-        let item = AVPlayerItem(url: url)
+        // Some M3U channels only play with a particular app name or referring site.
+        let headers = headersProvider?(channel) ?? [:]
+        let asset = headers.isEmpty
+            ? AVURLAsset(url: url)
+            : AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        let item = AVPlayerItem(asset: asset)
         observe(item)
         avPlayer.replaceCurrentItem(with: item)
         if !isPaused { avPlayer.play() }

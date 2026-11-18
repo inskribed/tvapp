@@ -273,36 +273,82 @@ struct AddPlaylistForm: View {
     @Environment(AppModel.self) private var model
     var onDone: () -> Void = {}
 
+    private enum Kind: String, CaseIterable { case xtream = "Xtream login", m3u = "M3U link" }
+
+    /// Free, legal playlists for trying Orka out.
+    private static let freeSources: [(name: String, link: String)] = [
+        ("Free-TV", "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8"),
+        ("iptv-org (US)", "https://iptv-org.github.io/iptv/countries/us.m3u"),
+        ("iptv-org (all)", "https://iptv-org.github.io/iptv/index.m3u"),
+    ]
+
+    @State private var kind: Kind = .xtream
     @State private var name = ""
     @State private var server = ""
     @State private var username = ""
     @State private var password = ""
+    @State private var link = ""
+    @State private var guideLink = ""
     @State private var busy = false
     @State private var error: String?
 
     var body: some View {
         VStack(spacing: 14) {
+            Picker("Type", selection: $kind) {
+                ForEach(Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: kind) { error = nil }
+
             field("Name (optional)", text: $name)
-            field("Server URL", text: $server, placeholder: "http://example.com:8080", keyboard: .URL)
-            field("Username", text: $username)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Password").font(.footnote).foregroundStyle(.secondary)
-                SecureField("Password", text: $password)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .padding(14)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            if kind == .xtream {
+                field("Server URL", text: $server, placeholder: "http://example.com:8080", keyboard: .URL)
+                field("Username", text: $username)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Password").font(.footnote).foregroundStyle(.secondary)
+                    SecureField("Password", text: $password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(14)
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            } else {
+                field("Playlist link", text: $link, placeholder: "https://example.com/playlist.m3u", keyboard: .URL)
+                field("Guide link (optional)", text: $guideLink, placeholder: "https://example.com/guide.xml", keyboard: .URL)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Free and legal to try").font(.footnote).foregroundStyle(.secondary)
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(Self.freeSources, id: \.link) { src in
+                                Button(src.name) {
+                                    link = src.link
+                                    if name.isEmpty || Self.freeSources.contains(where: { $0.name == name }) { name = src.name }
+                                }
+                                .buttonStyle(.glass)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollClipDisabled()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             Button {
                 submit()
             } label: {
-                Text(busy ? "Connecting…" : "Save and connect").frame(maxWidth: .infinity)
+                Text(busy ? (kind == .m3u ? "Loading playlist…" : "Connecting…") : "Save and connect").frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
             .controlSize(.large)
             .disabled(busy)
             if let error {
                 Text(error).font(.subheadline).foregroundStyle(.red).multilineTextAlignment(.center)
+            }
+            if kind == .m3u {
+                Text("M3U links come from legal sources like Free-TV, iptv-org, an HDHomeRun or a Plex/Jellyfin server. iPhones play HLS (.m3u8) streams; other kinds may not play here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
     }
@@ -324,7 +370,12 @@ struct AddPlaylistForm: View {
         busy = true
         error = nil
         Task {
-            let result = await model.addPlaylist(name: name, server: server, username: username, password: password)
+            let result: String?
+            if kind == .m3u {
+                result = await model.addM3UPlaylist(name: name, link: link, guideLink: guideLink)
+            } else {
+                result = await model.addPlaylist(name: name, server: server, username: username, password: password)
+            }
             busy = false
             if let result { error = result } else { onDone() }
         }
@@ -342,7 +393,7 @@ struct WelcomeView: View {
                     .frame(width: 84, height: 95)
                     .padding(.top, 48)
                 Text("Welcome to Orka").font(.largeTitle.bold())
-                Text("Add your Xtream Codes login to start watching. Your channels load once, then Orka opens straight to your games.")
+                Text("Add your Xtream login or an M3U playlist link to start watching. Your channels load once, then Orka opens straight to your games.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

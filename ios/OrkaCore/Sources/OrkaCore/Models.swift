@@ -17,16 +17,26 @@ public enum ContentKind: String, Codable, CaseIterable, Sendable {
 public struct Playlist: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
+    /// Xtream server address, or the playlist link for M3U playlists.
     public var server: String
     public var username: String
     public var password: String
+    /// Set for M3U playlists (legal sources such as Free-TV or iptv-org). Nil for Xtream logins.
+    public var m3uURL: String?
+    /// Optional guide (XMLTV) link for M3U playlists.
+    public var epgURL: String?
 
-    public init(id: String, name: String, server: String, username: String, password: String) {
+    public var isM3U: Bool { m3uURL != nil }
+
+    public init(id: String, name: String, server: String, username: String, password: String,
+                m3uURL: String? = nil, epgURL: String? = nil) {
         self.id = id
         self.name = name
         self.server = server
         self.username = username
         self.password = password
+        self.m3uURL = m3uURL
+        self.epgURL = epgURL
     }
 }
 
@@ -48,11 +58,16 @@ public struct Channel: Codable, Hashable, Identifiable, Sendable {
     public var logo: String?
     public var categoryId: String
     public var epgId: String?
+    /// M3U channels carry their own stream address (and sometimes connection details).
+    public var url: String?
+    public var userAgent: String?
+    public var referrer: String?
 
     /// Unique across all playlists.
     public var id: String { "\(playlistId):\(streamId)" }
 
-    public init(playlistId: String, streamId: String, num: Int, name: String, logo: String?, categoryId: String, epgId: String?) {
+    public init(playlistId: String, streamId: String, num: Int, name: String, logo: String?, categoryId: String, epgId: String?,
+                url: String? = nil, userAgent: String? = nil, referrer: String? = nil) {
         self.playlistId = playlistId
         self.streamId = streamId
         self.num = num
@@ -60,6 +75,9 @@ public struct Channel: Codable, Hashable, Identifiable, Sendable {
         self.logo = logo
         self.categoryId = categoryId
         self.epgId = epgId
+        self.url = url
+        self.userAgent = userAgent
+        self.referrer = referrer
     }
 }
 
@@ -120,6 +138,7 @@ public enum OrkaError: LocalizedError {
     case badAddress
     case notXtream
     case emptyResponse
+    case notM3U
 
     public var errorDescription: String? {
         switch self {
@@ -127,6 +146,7 @@ public enum OrkaError: LocalizedError {
         case .badAddress: return "The server address doesn't look right."
         case .notXtream: return "That address didn't respond like an Xtream server."
         case .emptyResponse: return "The server sent an empty response."
+        case .notM3U: return "That link didn't return an M3U playlist."
         }
     }
 }
