@@ -94,10 +94,13 @@ Movies and Series must NEVER sync at launch: add them as separate `ContentKind` 
 manually from Settings > Library (placeholders exist, "Coming soon"), on both Android and iOS.
 
 **iOS UX decisions:** opens to Home (live/upcoming games summary, recently watched, favorites);
-tabs Home, Guide (no time grid on phone: group tiles at the top jump to a group; "All channels"
-is one list with a pinned glass header per shown group; single groups via the Groups sheet), Sports,
-Favorites, Search; Settings is a
-sheet from Home. Touch and hold = favorite. Swipe up/down in the player = channel up/down.
+tabs Home (plain "Home" large title — no logo in the UI, per Apple's guidance), Guide (no time grid
+on phone: group tiles at the top select a group, same as the Groups sheet; "All channels" is one list
+with a pinned glass header per shown group), Sports, Favorites, Search; Settings is a sheet from Home.
+Touch and hold = favorite. Player: bottom row is CH− · back 15s · play/pause · ahead 15s · CH+ (seek
+stays within the stream's buffer); swipe up = stream info panel (now/next, picture size, bitrate);
+swipe down = picture in picture (full screen closes when PiP starts; PiP "back to app" reopens it;
+closing the PiP window stops the stream; falls back to the mini bar if PiP isn't possible).
 Back out of the player = mini player bar above the tab bar. Long lists use light `listPanel`
 instead of glass for smoothness; glass is for cards, controls and the mini player.
 

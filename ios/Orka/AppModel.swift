@@ -156,6 +156,8 @@ final class AppModel {
 
         player.urlProvider = { [weak self] channel in self?.streamURL(for: channel) }
         player.onTuned = { [weak self] channel in self?.noteWatched(channel) }
+        player.onPictureInPictureStarted = { [weak self] in self?.showPlayer = false }
+        player.onRestoreFromPictureInPicture = { [weak self] in self?.showPlayer = true }
     }
 
     private func streamURL(for channel: Channel) -> URL? {

@@ -16,7 +16,7 @@ private struct GuideSection: Identifiable {
 }
 
 /// Channels with what's on now. "All channels" is split into one section per shown group, with
-/// headers that stay pinned while you scroll; the tiles at the top jump straight to a group.
+/// headers that stay pinned while you scroll; the tiles at the top show one group, like the Groups menu.
 /// Guide data is only fetched for the rows on screen.
 struct GuideView: View {
     @Environment(AppModel.self) private var model
@@ -24,8 +24,6 @@ struct GuideView: View {
     @State private var showGroups = false
     @State private var sections: [GuideSection] = []
     @State private var built = false
-    @State private var buildCount = 0
-    @State private var jumpTo: String?
 
     private var isAll: Bool { model.guideGroup == AppModel.allGroup }
 
@@ -35,13 +33,14 @@ struct GuideView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         Color.clear.frame(height: 0).id("top")
-                        if !model.channels.isEmpty { groupTiles(proxy) }
+                        if !model.channels.isEmpty { groupTiles }
                         content
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
                 }
-                .onChange(of: buildCount) { performJump(proxy) }
+                // A newly chosen group starts at the top.
+                .onChange(of: model.guideGroup) { _, _ in proxy.scrollTo("top", anchor: .top) }
             }
             .miniPlayerInset()
             .background(OrkaBackground())
@@ -71,28 +70,34 @@ struct GuideView: View {
         model.categories.filter { (model.library.counts[$0.id] ?? 0) > 0 && model.isGroupVisible($0.id) }
     }
 
-    private func groupTiles(_ proxy: ScrollViewProxy) -> some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: 8) {
-                tile(id: AppModel.allGroup, name: "All channels", count: model.channels.count, proxy: proxy)
-                if !model.favorites.isEmpty {
-                    tile(id: AppModel.favoritesGroup, name: "★ Favorites", count: model.favorites.count, proxy: proxy)
+    private var groupTiles: some View {
+        ScrollViewReader { tiles in
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 8) {
+                    tile(id: AppModel.allGroup, name: "All channels", count: model.channels.count)
+                    if !model.favorites.isEmpty {
+                        tile(id: AppModel.favoritesGroup, name: "★ Favorites", count: model.favorites.count)
+                    }
+                    ForEach(shownGroups) { c in
+                        tile(id: c.id, name: c.name, count: model.library.counts[c.id] ?? 0)
+                    }
                 }
-                ForEach(shownGroups) { c in
-                    tile(id: c.id, name: c.name, count: model.library.counts[c.id] ?? 0, proxy: proxy)
-                }
+                .padding(.vertical, 2)
             }
-            .padding(.vertical, 2)
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+            // Keep the chosen tile in view (e.g. after picking a group from the Groups menu).
+            .onChange(of: model.guideGroup) { _, id in
+                withAnimation { tiles.scrollTo(id, anchor: .center) }
+            }
         }
-        .scrollIndicators(.hidden)
-        .scrollClipDisabled()
     }
 
-    private func tile(id: String, name: String, count: Int, proxy: ScrollViewProxy) -> some View {
+    private func tile(id: String, name: String, count: Int) -> some View {
         let current = model.guideGroup == id
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return Button {
-            select(id, proxy: proxy)
+            select(id)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -105,29 +110,12 @@ struct GuideView: View {
         }
         .buttonStyle(.plain)
         .glassEffect(current ? .regular.tint(model.accent.opacity(0.35)).interactive() : .regular.interactive(), in: shape)
+        .id(id)
     }
 
-    /// All / Favorites switch the view. A group tile jumps to that group's section in All channels.
-    private func select(_ id: String, proxy: ScrollViewProxy) {
-        if id == AppModel.allGroup || id == AppModel.favoritesGroup {
-            model.guideGroup = id
-            withAnimation { proxy.scrollTo("top", anchor: .top) }
-            return
-        }
-        if isAll && sections.contains(where: { $0.id == id }) {
-            withAnimation { proxy.scrollTo(id, anchor: .top) }
-            return
-        }
-        // Not on screen yet: switch to All channels (clearing a filter that hides it), then jump.
-        jumpTo = id
-        if !isAll { model.guideGroup = AppModel.allGroup }
-        if !filter.isEmpty { filter = "" }
-    }
-
-    private func performJump(_ proxy: ScrollViewProxy) {
-        guard let id = jumpTo, sections.contains(where: { $0.id == id }) else { return }
-        jumpTo = nil
-        withAnimation { proxy.scrollTo(id, anchor: .top) }
+    /// A tile shows that group, the same as picking it from the Groups menu.
+    private func select(_ id: String) {
+        model.guideGroup = id
     }
 
     // MARK: List
@@ -244,7 +232,6 @@ struct GuideView: View {
         if Task.isCancelled { return }
         sections = built
         self.built = true
-        buildCount += 1
     }
 }
 

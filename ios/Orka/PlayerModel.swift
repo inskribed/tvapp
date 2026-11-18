@@ -22,6 +22,14 @@ final class PlayerModel {
     @ObservationIgnored let avPlayer = AVPlayer()
     @ObservationIgnored var urlProvider: (@MainActor (Channel) -> URL?)?
     @ObservationIgnored var onTuned: (@MainActor (Channel) -> Void)?
+    /// Picture in picture took over: close the full screen player.
+    @ObservationIgnored var onPictureInPictureStarted: (@MainActor () -> Void)?
+    /// The PiP window's "back to app" button: reopen the full screen player.
+    @ObservationIgnored var onRestoreFromPictureInPicture: (@MainActor () -> Void)?
+    private(set) var isPictureInPictureActive = false
+    @ObservationIgnored private var pipDelegate: PiPDelegate?
+    @ObservationIgnored private var pendingLayer: AVPlayerLayer?
+    @ObservationIgnored fileprivate var restoringFromPiP = false
 
     @ObservationIgnored private var pip: AVPictureInPictureController?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -173,14 +181,73 @@ final class PlayerModel {
     /// so going to the home screen while something plays continues in picture in picture.
     func attach(layer: AVPlayerLayer) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
+        // Replacing the controller while PiP is showing would close the PiP window; wait for it to end.
+        if pip?.isPictureInPictureActive == true {
+            pendingLayer = layer
+            return
+        }
         let controller = AVPictureInPictureController(playerLayer: layer)
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        if pipDelegate == nil { pipDelegate = PiPDelegate(model: self) }
+        controller?.delegate = pipDelegate
         pip = controller
     }
 
     func togglePictureInPicture() {
         guard let pip else { return }
         if pip.isPictureInPictureActive { pip.stopPictureInPicture() } else { pip.startPictureInPicture() }
+    }
+
+    /// Starts picture in picture. False if the phone can't right now (the caller then uses the mini player).
+    @discardableResult
+    func startPictureInPicture() -> Bool {
+        guard let pip, pip.isPictureInPicturePossible, current != nil else { return false }
+        pip.startPictureInPicture()
+        return true
+    }
+
+    // MARK: Seeking (within what the stream keeps buffered)
+
+    /// Jumps back or forward within the live stream's buffer. Forward past the end lands on "live".
+    func seek(by seconds: Double) {
+        guard let item = avPlayer.currentItem,
+              let range = item.seekableTimeRanges.last?.timeRangeValue,
+              range.duration.seconds > 1 else { return }
+        let now = avPlayer.currentTime().seconds
+        let start = range.start.seconds
+        let end = range.end.seconds
+        let target = min(max(now + seconds, start), end)
+        avPlayer.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+    }
+
+    /// Picture size and bitrate of the current stream, for the info panel.
+    func streamDetails() -> String? {
+        guard let item = avPlayer.currentItem else { return nil }
+        var parts: [String] = []
+        let size = item.presentationSize
+        if size.width > 0 { parts.append("\(Int(size.width))×\(Int(size.height))") }
+        if let event = item.accessLog()?.events.last {
+            let bps = event.indicatedBitrate > 0 ? event.indicatedBitrate : event.observedBitrate
+            if bps > 0 { parts.append(String(format: "%.1f Mbps", bps / 1_000_000)) }
+        }
+        parts.append("HLS")
+        return parts.joined(separator: "  ·  ")
+    }
+
+    fileprivate func pictureInPictureDidStart() {
+        isPictureInPictureActive = true
+        onPictureInPictureStarted?()
+    }
+
+    fileprivate func pictureInPictureDidStop() {
+        isPictureInPictureActive = false
+        if let layer = pendingLayer {
+            pendingLayer = nil
+            attach(layer: layer)
+        }
+        // Closing the PiP window (rather than going back to the app) stops the stream.
+        if !restoringFromPiP { stop() }
+        restoringFromPiP = false
     }
 
     // MARK: Loading and reconnecting
@@ -287,6 +354,34 @@ final class PlayerModel {
             failed = true
             status = "This channel isn't responding. Tap play to try again."
             updateNowPlaying()
+        }
+    }
+}
+
+/// Receives picture-in-picture events (AVKit needs an NSObject for this).
+private final class PiPDelegate: NSObject, AVPictureInPictureControllerDelegate {
+    weak var model: PlayerModel?
+
+    init(model: PlayerModel) {
+        self.model = model
+    }
+
+    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak model] in model?.pictureInPictureDidStart() }
+    }
+
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak model] in model?.pictureInPictureDidStop() }
+    }
+
+    func pictureInPictureController(
+        _ controller: AVPictureInPictureController,
+        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    ) {
+        Task { @MainActor [weak model] in
+            model?.restoringFromPiP = true
+            model?.onRestoreFromPictureInPicture?()
+            completionHandler(true)
         }
     }
 }
