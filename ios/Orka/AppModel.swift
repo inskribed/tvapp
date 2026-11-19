@@ -345,6 +345,51 @@ final class AppModel {
         }
     }
 
+    /// Saves changes to an existing playlist after checking the new details work. The playlist keeps
+    /// its id, so favorites, hidden groups and recents stay attached to it.
+    func updatePlaylist(_ old: Playlist, name: String, server: String, username: String, password: String,
+                        link: String, guideLink: String) async -> String? {
+        let trim = CharacterSet.whitespacesAndNewlines
+        let n = name.trimmingCharacters(in: trim)
+        var updated = old
+        updated.name = n.isEmpty ? old.name : n
+        do {
+            if old.isM3U {
+                let l = link.trimmingCharacters(in: trim)
+                if l.isEmpty { return "Please enter the playlist link." }
+                let url = XtreamClient.normalizeLink(l)
+                updated.server = url
+                updated.m3uURL = url
+                let g = guideLink.trimmingCharacters(in: trim)
+                updated.epgURL = g.isEmpty ? nil : XtreamClient.normalizeLink(g)
+                let result = try await xtream.fetchM3U(updated)
+                if result.data.channels.isEmpty { return "That playlist has no channels Orka can play." }
+                if updated.epgURL == nil { updated.epgURL = result.guideURLs.first }
+                cache.save(result.data, playlistId: old.id)
+            } else {
+                let s = server.trimmingCharacters(in: trim)
+                let u = username.trimmingCharacters(in: trim)
+                let p = password.trimmingCharacters(in: trim)
+                if s.isEmpty || u.isEmpty || p.isEmpty { return "Please fill in the server, username and password." }
+                updated.server = XtreamClient.normalizeServer(s)
+                updated.username = u
+                updated.password = p
+                let info = try await xtream.authenticate(updated)
+                if !info.ok { return info.message ?? "Login failed." }
+                // A different server or account: the saved channel list belongs to the old one.
+                if updated.server != old.server || updated.username != old.username {
+                    cache.remove(playlistId: old.id)
+                }
+            }
+        } catch {
+            return (old.isM3U ? "Couldn't load that playlist: " : "Couldn't connect: ") + friendly(error)
+        }
+        if let i = playlists.firstIndex(where: { $0.id == old.id }) { playlists[i] = updated }
+        store.savePlaylists(playlists)
+        if active?.id == old.id { setActive(old.id) }
+        return nil
+    }
+
     /// Adds an M3U playlist (Free-TV, iptv-org, HDHomeRun, Plex...). It's downloaded once to check it.
     func addM3UPlaylist(name: String, link: String, guideLink: String) async -> String? {
         let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)

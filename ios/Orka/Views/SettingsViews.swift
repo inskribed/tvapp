@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var showAdd = false
+    @State private var editing: Playlist?
 
     var body: some View {
         NavigationStack {
@@ -41,6 +42,22 @@ struct SettingsView: View {
                     }
                 }
             }
+            .sheet(item: $editing) { p in
+                NavigationStack {
+                    ScrollView {
+                        AddPlaylistForm(editing: p) { editing = nil }
+                            .padding(16)
+                    }
+                    .background(OrkaBackground())
+                    .navigationTitle("Edit playlist")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { editing = nil }
+                        }
+                    }
+                }
+            }
             .task { await model.refreshAccount() }
         }
     }
@@ -48,24 +65,42 @@ struct SettingsView: View {
     private var playlistsSection: some View {
         Section("Playlists") {
             ForEach(model.playlists) { p in
-                Button {
-                    if p.id != model.active?.id { model.setActive(p.id) }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(p.name)
-                            Text(p.server).font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Button {
+                        if p.id != model.active?.id { model.setActive(p.id) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name)
+                                Text(p.isM3U ? "M3U · \(p.server)" : p.server)
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            if p.id == model.active?.id {
+                                Text("In use").font(.caption).foregroundStyle(model.accent)
+                            }
                         }
-                        Spacer()
-                        if p.id == model.active?.id {
-                            Text("In use").font(.caption).foregroundStyle(model.accent)
-                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    Button {
+                        editing = p
+                    } label: {
+                        Image(systemName: "pencil.circle")
+                            .font(.title3)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Edit \(p.name)")
                 }
-                .buttonStyle(.plain)
                 .swipeActions {
                     Button("Remove", role: .destructive) { model.removePlaylist(p.id) }
+                    Button("Edit") { editing = p }.tint(model.accent)
+                }
+                .contextMenu {
+                    Button { editing = p } label: { Label("Edit", systemImage: "pencil") }
+                    Button(role: .destructive) { model.removePlaylist(p.id) } label: { Label("Remove", systemImage: "trash") }
                 }
             }
             Button("Add playlist") { showAdd = true }
@@ -271,7 +306,22 @@ struct TeamPickerView: View {
 /// Xtream Codes login. Used on first launch and from Settings.
 struct AddPlaylistForm: View {
     @Environment(AppModel.self) private var model
-    var onDone: () -> Void = {}
+    /// Set when editing an existing playlist: the form starts filled in and the type is fixed.
+    let editing: Playlist?
+    let onDone: () -> Void
+
+    init(editing: Playlist? = nil, onDone: @escaping () -> Void = {}) {
+        self.editing = editing
+        self.onDone = onDone
+        let p = editing
+        _kind = State(initialValue: p?.isM3U == true ? .m3u : .xtream)
+        _name = State(initialValue: p?.name ?? "")
+        _server = State(initialValue: (p?.isM3U == false ? p?.server : nil) ?? "")
+        _username = State(initialValue: p?.username ?? "")
+        _password = State(initialValue: p?.password ?? "")
+        _link = State(initialValue: p?.m3uURL ?? "")
+        _guideLink = State(initialValue: p?.epgURL ?? "")
+    }
 
     private enum Kind: String, CaseIterable { case xtream = "Xtream login", m3u = "M3U link" }
 
@@ -294,13 +344,15 @@ struct AddPlaylistForm: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Picker("Type", selection: $kind) {
-                ForEach(Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            if editing == nil {
+                Picker("Type", selection: $kind) {
+                    ForEach(Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: kind) { error = nil }
             }
-            .pickerStyle(.segmented)
-            .onChange(of: kind) { error = nil }
 
-            field("Name (optional)", text: $name)
+            field(editing == nil ? "Name (optional)" : "Name", text: $name)
             if kind == .xtream {
                 field("Server URL", text: $server, placeholder: "http://example.com:8080", keyboard: .URL)
                 field("Username", text: $username)
@@ -315,7 +367,7 @@ struct AddPlaylistForm: View {
             } else {
                 field("Playlist link", text: $link, placeholder: "https://example.com/playlist.m3u", keyboard: .URL)
                 field("Guide link (optional)", text: $guideLink, placeholder: "https://example.com/guide.xml", keyboard: .URL)
-                VStack(alignment: .leading, spacing: 8) {
+                if editing == nil { VStack(alignment: .leading, spacing: 8) {
                     Text("Free and legal to try").font(.footnote).foregroundStyle(.secondary)
                     ScrollView(.horizontal) {
                         HStack(spacing: 8) {
@@ -331,12 +383,13 @@ struct AddPlaylistForm: View {
                     .scrollIndicators(.hidden)
                     .scrollClipDisabled()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading) }
             }
             Button {
                 submit()
             } label: {
-                Text(busy ? (kind == .m3u ? "Loading playlist…" : "Connecting…") : "Save and connect").frame(maxWidth: .infinity)
+                Text(busy ? (kind == .m3u ? "Loading playlist…" : "Connecting…") : (editing == nil ? "Save and connect" : "Save changes"))
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
             .controlSize(.large)
@@ -371,7 +424,10 @@ struct AddPlaylistForm: View {
         error = nil
         Task {
             let result: String?
-            if kind == .m3u {
+            if let editing {
+                result = await model.updatePlaylist(editing, name: name, server: server, username: username,
+                                                    password: password, link: link, guideLink: guideLink)
+            } else if kind == .m3u {
                 result = await model.addM3UPlaylist(name: name, link: link, guideLink: guideLink)
             } else {
                 result = await model.addPlaylist(name: name, server: server, username: username, password: password)
