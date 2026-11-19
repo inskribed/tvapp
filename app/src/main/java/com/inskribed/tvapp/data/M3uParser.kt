@@ -81,7 +81,7 @@ object M3uParser {
                 }
             }
         }
-        return Result(LiveData(groups.map { Category(it, it) }, channels), guideUrls)
+        return Result(LiveData(groups.map { Category(it, it) }, channels, guideUrls), guideUrls)
     }
 
     /** `#EXTINF:-1 tvg-id="x" group-title="News, Sports",Channel Name`: the title starts after the first comma outside quotes. */

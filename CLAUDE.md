@@ -120,8 +120,16 @@ Movies/Series, program search, widgets.
   change both). group-title (first of "A;B") → #EXTGRP → tvg-country → country from tvg-id → "Other";
   #EXTVLCOPT http-user-agent / http-referrer kept per channel and sent when playing; YouTube/Twitch
   pages and non-URLs skipped; channel id = "m" + 12 hex of SHA-1(url) so favorites survive refreshes.
-- M3U playlists: no account info, no Xtream short EPG (guide = XMLTV, the next step; the guide link
-  from `url-tvg`/`x-tvg-url` or the user is already saved as `epgUrl`). Android caches the raw text
+- M3U guide = XMLTV (`ios/OrkaCore/.../XMLTV.swift`, unit-tested; `data/Xmltv.kt`, same rules):
+  sources = a link the user typed (`epgUrl`, comma-separated ok) or else the playlist header's list
+  (`LiveData.guideUrls`), cut by `chooseSources` to the shown channels' countries (from tvg-id
+  suffix), max 8 files, plainest file per country, never "all_sources"/"dummy". Matching: tvg-id →
+  id without punctuation → display name minus brackets/quality words. Window: −2h…+24h, summaries
+  ≤400 chars. Saved per playlist (iOS `guide_<id>.json`, Android `guide_<id>.tsv`), refreshed in the
+  background after 12h; applied to every channel's epg state at once (no per-channel requests).
+  Android streams + gunzips while downloading (XmlPullParser); iOS downloads, gunzips via
+  NSData(.zlib) after the gzip header, XMLParser. The header link is no longer saved into `epgUrl`
+  (that field is the user's override only). Android caches the raw text
   (`cache_<id>_m3u.json`); iOS caches the parsed list like Xtream. Android plays HLS/TS/DASH (dash
   module added); iPhone plays HLS only.
 - Add playlist has one-tap Free-TV / iptv-org buttons (`FREE_SOURCES` / `freeSources`).

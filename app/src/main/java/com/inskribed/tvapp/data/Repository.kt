@@ -2,6 +2,7 @@ package com.inskribed.tvapp.data
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -52,7 +53,47 @@ class Repository(private val context: Context, private val client: XtreamClient)
         return data
     }
 
+    // ---- M3U guide (XMLTV) ----------------------------------------------
+
+    private fun guideFile(playlistId: String) = File(context.filesDir, "guide_$playlistId.tsv")
+
+    suspend fun loadGuide(playlistId: String): Pair<Map<String, List<Program>>, Long>? =
+        withContext(Dispatchers.IO) { Xmltv.load(guideFile(playlistId)) }
+
+    suspend fun saveGuide(playlistId: String, programs: Map<String, List<Program>>) =
+        withContext(Dispatchers.IO) { Xmltv.save(guideFile(playlistId), programs, System.currentTimeMillis()) }
+
+    fun clearGuide(playlistId: String) {
+        guideFile(playlistId).delete()
+    }
+
+    /**
+     * Downloads the guide files one at a time, reading each as it arrives. Returns the programs by
+     * channel key and how many files failed.
+     */
+    suspend fun downloadGuide(sources: List<String>, channels: List<Channel>): Pair<Map<String, List<Program>>, Int> =
+        withContext(Dispatchers.IO) {
+            val matcher = Xmltv.Matcher(channels)
+            val now = System.currentTimeMillis()
+            val into = HashMap<String, MutableList<Program>>()
+            var failures = 0
+            for (s in sources) {
+                ensureActive()
+                try {
+                    client.openStream(s) { input ->
+                        Xmltv.parse(Xmltv.maybeGunzip(input), matcher, now - Xmltv.LOOK_BACK_MS, now + Xmltv.LOOK_AHEAD_MS, into)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    failures++
+                }
+            }
+            Xmltv.tidy(into) to failures
+        }
+
     fun clear(playlistId: String) {
+        clearGuide(playlistId)
         file(playlistId, "cats").delete()
         file(playlistId, "streams").delete()
         file(playlistId, "m3u").delete()

@@ -43,6 +43,17 @@ class XtreamClient(private val http: OkHttpClient) {
         return get(u)
     }
 
+    /** Opens a download as a stream (for guide files, which are read as they arrive). */
+    fun <T> openStream(url: String, block: (java.io.InputStream) -> T): T {
+        val u = url.toHttpUrlOrNull() ?: throw IOException("The guide link doesn't look right")
+        val req = Request.Builder().url(u).header("User-Agent", USER_AGENT).build()
+        return http.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("Guide download returned HTTP ${resp.code}")
+            val body = resp.body ?: throw IOException("Empty guide download")
+            body.byteStream().use(block)
+        }
+    }
+
     /** "example.com/list.m3u" -> "http://example.com/list.m3u" */
     fun normalizeLink(raw: String): String {
         val s = raw.trim()

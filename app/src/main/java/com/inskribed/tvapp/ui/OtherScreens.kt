@@ -146,6 +146,24 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
 
+        if (vm.active?.isM3u == true) {
+            item {
+                val updated = vm.guideUpdatedMs
+                SettingToggle(
+                    title = "TV guide",
+                    value = when {
+                        vm.guideSyncing -> "Updating…"
+                        vm.guideError != null -> "Couldn't update"
+                        !vm.guideHasSource && updated == null -> "No guide link"
+                        updated != null -> "${vm.guideChannelCount} channels · " +
+                            android.text.format.DateUtils.getRelativeTimeSpanString(updated).toString()
+                        else -> "Not loaded"
+                    },
+                    hint = "From the playlist's guide files, only for channels you've kept shown. Updates every 12 hours; press OK to update now.",
+                    onClick = { vm.loadGuide(force = true) },
+                )
+            }
+        }
         item { SettingHeader("Sports") }
         item {
             SettingToggle(

@@ -22,6 +22,7 @@ import com.inskribed.tvapp.data.Repository
 import com.inskribed.tvapp.data.XtreamClient
 import com.inskribed.tvapp.data.ChannelMatcher
 import com.inskribed.tvapp.data.ChannelSearch
+import com.inskribed.tvapp.data.Xmltv
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.inskribed.tvapp.data.Game
@@ -107,6 +108,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var groupCounts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
     var showGroupPicker by mutableStateOf(false)
+
+    // M3U guide (XMLTV) status, shown in Settings
+    var guideSyncing by mutableStateOf(false)
+        private set
+    var guideError by mutableStateOf<String?>(null)
+        private set
+    var guideUpdatedMs by mutableStateOf<Long?>(null)
+        private set
+    var guideChannelCount by mutableStateOf(0)
+        private set
+    var guideHasSource by mutableStateOf(false)
+        private set
+    private var guideJob: Job? = null
+    private var guideLoadedFor: String? = null
+    private var playlistGuideUrls: List<String> = emptyList()
     private var searchIndexFor: List<Channel>? = null
     private var searchWords: List<List<String>> = emptyList()
     private var searchSquashed: List<String> = emptyList()
@@ -233,7 +249,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 // The playlist may name its own guide; keep it for when guide support arrives.
-                val saved = if (p.epgUrl == null && result.guideUrls.isNotEmpty()) p.copy(epgUrl = result.guideUrls.first()) else p
+                val saved = p
                 playlists = playlists + saved
                 prefs.savePlaylists(playlists)
                 showAddPlaylist = false
@@ -292,9 +308,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         onResult("That playlist has no channels Orka can play.")
                         return@launch
                     }
-                    updated = if (candidate.epgUrl == null && result.guideUrls.isNotEmpty()) {
-                        candidate.copy(epgUrl = result.guideUrls.first())
-                    } else candidate
+                    updated = candidate
+                    repo.clearGuide(old.id) // links may have changed; rebuild the guide
                 } else {
                     if (server.isBlank() || username.isBlank() || password.isBlank()) {
                         onResult("Please fill in the server, username and password.")
@@ -377,6 +392,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         hiddenGroups = prefs.hiddenGroups(id)
         account = null
         epgStates.values.forEach { it.value = null }
+        guideJob?.cancel()
+        guideJob = null
+        guideLoadedFor = null
+        guideUpdatedMs = null
+        guideChannelCount = 0
+        guideError = null
+        playlistGuideUrls = emptyList()
         loadActive()
     }
 
@@ -437,7 +459,75 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         categories = data.categories
         allChannels = data.channels
         groupCounts = data.channels.groupingBy { it.categoryId }.eachCount()
+        playlistGuideUrls = data.guideUrls
         rebuildVisible()
+        if (active?.isM3u == true) loadGuide()
+    }
+
+    // ---- M3U guide (XMLTV) ---------------------------------------------
+
+    /**
+     * Which guide files to use: a link you typed wins; otherwise the playlist's own list, cut down
+     * to the countries of the channels you've kept shown (Free-TV lists 100+ files).
+     */
+    private fun guideSources(p: Playlist): List<String> {
+        val typed = p.epgUrl?.trim()
+        if (!typed.isNullOrEmpty() && typed !in playlistGuideUrls) {
+            return typed.split(',').map { it.trim() }.filter { it.startsWith("http") }
+        }
+        val urls = playlistGuideUrls.ifEmpty { listOfNotNull(typed) }
+        return Xmltv.chooseSources(urls, Xmltv.countryCodes(channels))
+    }
+
+    /**
+     * Shows the saved guide right away, and downloads a fresh one when it's missing, older than
+     * 12 hours, or [force] is set. Runs in the background; never holds up the app.
+     */
+    fun loadGuide(force: Boolean = false) {
+        val p = active ?: return
+        if (!p.isM3u || guideJob?.isActive == true) return
+        val sources = guideSources(p)
+        guideHasSource = sources.isNotEmpty()
+        val chans = allChannels
+        guideJob = viewModelScope.launch {
+            val saved = repo.loadGuide(p.id)
+            if (saved != null && active?.id == p.id) applyGuide(saved.first, saved.second, p.id)
+            val stale = saved == null || System.currentTimeMillis() - saved.second > REFRESH_AFTER_MS
+            if (!force && !stale) return@launch
+            if (sources.isEmpty()) {
+                if (active?.id == p.id) applyGuide(emptyMap(), null, p.id)
+                return@launch
+            }
+            guideSyncing = true
+            guideError = null
+            try {
+                val (programs, failures) = repo.downloadGuide(sources, chans)
+                if (active?.id != p.id) return@launch
+                if (failures == sources.size) {
+                    guideError = "Couldn't download the guide."
+                } else {
+                    repo.saveGuide(p.id, programs)
+                    applyGuide(programs, System.currentTimeMillis(), p.id)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                guideError = friendly(e)
+            } finally {
+                guideSyncing = false
+            }
+        }
+    }
+
+    /** Puts the guide on every channel of the playlist (channels it doesn't cover show "No guide info"). */
+    private fun applyGuide(programs: Map<String, List<Program>>, savedAt: Long?, playlistId: String) {
+        val now = System.currentTimeMillis()
+        for (ch in allChannels) {
+            if (ch.playlistId == playlistId) epgState(ch.key).value = EpgEntry(programs[ch.key].orEmpty(), now, false)
+        }
+        guideLoadedFor = playlistId
+        guideUpdatedMs = savedAt
+        guideChannelCount = programs.count { it.value.isNotEmpty() }
     }
 
     private fun rebuildVisible() {
@@ -579,10 +669,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Fetches guide data for a channel if it's missing or stale. At most 4 requests run at once. */
     suspend fun ensureEpg(ch: Channel) {
-        if (ch.epgId.isNullOrBlank()) return
         val p = playlists.find { it.id == ch.playlistId } ?: return
-        // M3U playlists don't have Xtream's per-channel guide; their guide (XMLTV) comes next.
-        if (p.isM3u) return
+        if (p.isM3u) {
+            // M3U guides come from XMLTV files, loaded for the whole playlist at once.
+            if (guideLoadedFor != p.id && guideJob?.isActive != true) loadGuide()
+            return
+        }
+        if (ch.epgId.isNullOrBlank()) return
         fun fresh(e: EpgEntry?): Boolean {
             if (e == null) return false
             val age = System.currentTimeMillis() - e.fetchedMs

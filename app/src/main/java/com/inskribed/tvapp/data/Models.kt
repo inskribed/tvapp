@@ -45,6 +45,8 @@ data class Channel(
 data class LiveData(
     val categories: List<Category>,
     val channels: List<Channel>,
+    /** Guide (XMLTV) links an M3U playlist names in its header. */
+    val guideUrls: List<String> = emptyList(),
 )
 
 data class AccountInfo(
