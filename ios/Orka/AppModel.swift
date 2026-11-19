@@ -28,6 +28,7 @@ struct Library: Sendable {
     var normalizedNames: [String] = []
     var words: [[String]] = []
     var counts: [String: Int] = [:]
+    var guideURLs: [String] = []
 
     static func build(_ data: LiveData) -> Library {
         var counts: [String: Int] = [:]
@@ -37,7 +38,8 @@ struct Library: Sendable {
             channels: data.channels,
             normalizedNames: data.channels.map { ChannelMatcher.normalize($0.name) },
             words: data.channels.map { ChannelSearch.words($0.name) },
-            counts: counts
+            counts: counts,
+            guideURLs: data.guideURLs ?? []
         )
     }
 }
@@ -119,6 +121,15 @@ final class AppModel {
 
     // MARK: Guide
     private(set) var epg: [String: EpgEntry] = [:]
+    /// M3U guide (XMLTV) status, shown in Settings > Library.
+    private(set) var guideState: SyncState = .idle
+    private(set) var guideUpdated: Date?
+    private(set) var guideChannelCount = 0
+    private(set) var guideHasSource = false
+    @ObservationIgnored private let guideCache = GuideCacheStore()
+    @ObservationIgnored private var guideTask: Task<Void, Never>?
+    @ObservationIgnored private var guideLoadedFor: String?
+    @ObservationIgnored private var refreshedForGuideLinks: String?
 
     // MARK: Sports
     private(set) var games: [League: [Game]] = [:]
@@ -193,6 +204,8 @@ final class AppModel {
         startSportsUpdates()
         if active != nil, Date().timeIntervalSince(liveSyncedAt ?? .distantPast) > 12 * 3600 {
             Task { await refreshLive() }
+        } else if active?.isM3U == true, let updated = guideUpdated, Date().timeIntervalSince(updated) > 12 * 3600 {
+            loadGuide(force: true)
         }
     }
 
@@ -258,6 +271,7 @@ final class AppModel {
         liveSyncedAt = savedAt
         refreshSnapshots()
         rebuildVisible()
+        if active?.isM3U == true { loadGuide() }
     }
 
     /// Recomputes the visible channels after a sync or a change to hidden groups.
@@ -364,8 +378,8 @@ final class AppModel {
                 updated.epgURL = g.isEmpty ? nil : XtreamClient.normalizeLink(g)
                 let result = try await xtream.fetchM3U(updated)
                 if result.data.channels.isEmpty { return "That playlist has no channels Orka can play." }
-                if updated.epgURL == nil { updated.epgURL = result.guideURLs.first }
                 cache.save(result.data, playlistId: old.id)
+                guideCache.remove(playlistId: old.id) // links may have changed; rebuild the guide
             } else {
                 let s = server.trimmingCharacters(in: trim)
                 let u = username.trimmingCharacters(in: trim)
@@ -410,9 +424,7 @@ final class AppModel {
         do {
             let result = try await xtream.fetchM3U(playlist)
             if result.data.channels.isEmpty { return "That playlist has no channels Orka can play." }
-            var saved = playlist
-            // The playlist may name its own guide; keep it for when guide support arrives.
-            if saved.epgURL == nil, let g = result.guideURLs.first { saved.epgURL = g }
+            let saved = playlist
             cache.save(result.data, playlistId: saved.id)
             playlists.append(saved)
             store.savePlaylists(playlists)
@@ -434,6 +446,12 @@ final class AppModel {
         liveSyncedAt = nil
         account = nil
         epg.removeAll()
+        guideTask?.cancel()
+        guideTask = nil
+        guideLoadedFor = nil
+        guideState = .idle
+        guideUpdated = nil
+        guideChannelCount = 0
         matcher = nil
         matchCache.removeAll()
         channelsVersion += 1
@@ -445,6 +463,7 @@ final class AppModel {
         playlists.removeAll { $0.id == id }
         store.savePlaylists(playlists)
         cache.remove(playlistId: id)
+        guideCache.remove(playlistId: id)
         UserDefaults.standard.removeObject(forKey: "hidden_groups_\(id)")
         favorites.removeAll { $0.playlistId == id }
         recents.removeAll { $0.playlistId == id }
@@ -582,9 +601,13 @@ final class AppModel {
 
     /// Loads guide data for one channel when it's missing or stale. At most 4 requests run at once.
     func ensureEpg(_ ch: Channel) async {
-        // M3U playlists don't have Xtream's per-channel guide; their guide (XMLTV) comes in the next step.
+        if let p = playlists.first(where: { $0.id == ch.playlistId }), p.isM3U {
+            // M3U guides come from XMLTV files, loaded for the whole playlist at once.
+            if guideLoadedFor != p.id && guideTask == nil { loadGuide() }
+            return
+        }
         guard let eid = ch.epgId, !eid.isEmpty,
-              let p = playlists.first(where: { $0.id == ch.playlistId }), !p.isM3U else { return }
+              let p = playlists.first(where: { $0.id == ch.playlistId }) else { return }
         if isFresh(epg[ch.id]) { return }
         await limiter.acquire()
         if Task.isCancelled || isFresh(epg[ch.id]) {
@@ -606,6 +629,100 @@ final class AppModel {
             for key in epg.keys.prefix(200) { epg.removeValue(forKey: key) }
         }
         epg[ch.id] = entry
+    }
+
+    // MARK: M3U guide (XMLTV)
+
+    /// Which guide files to use: a link you typed wins; otherwise the playlist's own list, cut down to
+    /// the countries of the channels you've kept shown (Free-TV lists 100+ files).
+    private func guideSources(for p: Playlist) -> [String] {
+        let header = library.guideURLs
+        if let typed = p.epgURL, !typed.isEmpty, !header.contains(typed) {
+            return typed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.hasPrefix("http") }
+        }
+        let urls = header.isEmpty ? [p.epgURL].compactMap { $0 } : header
+        return XMLTV.chooseSources(urls: urls, countries: XMLTV.countryCodes(of: visibleChannels))
+    }
+
+    /// Shows the saved guide right away, and downloads a fresh one when it's missing, older than
+    /// 12 hours, or `force` is set. Runs in the background; never holds up the app.
+    func loadGuide(force: Bool = false) {
+        guard let p = active, p.isM3U, guideTask == nil else { return }
+        // Playlists saved before guide support didn't keep their guide links: download the playlist
+        // once more to get them (this calls loadGuide again when done).
+        if library.guideURLs.isEmpty, refreshedForGuideLinks != p.id, !library.channels.isEmpty {
+            refreshedForGuideLinks = p.id
+            Task { await refreshLive() }
+            return
+        }
+        let sources = guideSources(for: p)
+        guideHasSource = !sources.isEmpty
+        let channels = library.channels
+        let store = guideCache
+        let session = xtream.session
+        guideTask = Task { [weak self] in
+            // 1. The saved guide, if any (instant).
+            let saved = await Task.detached(priority: .userInitiated) { store.load(playlistId: p.id) }.value
+            if let saved, let self, self.active?.id == p.id {
+                self.applyGuide(saved.programs, savedAt: saved.savedAt, for: p.id)
+            }
+            let stale = saved.map { Date().timeIntervalSince($0.savedAt) > 12 * 3600 } ?? true
+            guard force || stale else {
+                self?.guideTask = nil
+                return
+            }
+            guard !sources.isEmpty else {
+                if let self, self.active?.id == p.id {
+                    self.applyGuide([:], savedAt: nil, for: p.id)
+                    self.guideTask = nil
+                }
+                return
+            }
+            // 2. Download and read the guide files, one at a time, off the main thread.
+            self?.guideState = .syncing
+            let result = await Task.detached(priority: .utility) { () -> (programs: [String: [Program]], failures: Int) in
+                let matcher = XMLTV.Matcher(channels: channels)
+                let now = Date()
+                var guide: [String: [Program]] = [:]
+                var failures = 0
+                for s in sources {
+                    if Task.isCancelled { break }
+                    guard let url = URL(string: s),
+                          let fetched = try? await session.data(from: url),
+                          (fetched.1 as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+                          let xml = XMLTV.gunzipIfNeeded(fetched.0) else {
+                        failures += 1
+                        continue
+                    }
+                    XMLTV.parse(xml, matcher: matcher, from: now.addingTimeInterval(-XMLTV.lookBack),
+                                to: now.addingTimeInterval(XMLTV.lookAhead), into: &guide)
+                }
+                XMLTV.tidy(&guide)
+                return (guide, failures)
+            }.value
+            guard let self, !Task.isCancelled, self.active?.id == p.id else { return }
+            if result.failures == sources.count {
+                self.guideState = .failed("Couldn't download the guide.")
+            } else {
+                store.save(result.programs, playlistId: p.id)
+                self.applyGuide(result.programs, savedAt: Date(), for: p.id)
+                self.guideState = .idle
+            }
+            self.guideTask = nil
+        }
+    }
+
+    /// Puts the guide on every channel of the playlist (channels it doesn't cover show "No guide info").
+    private func applyGuide(_ programs: [String: [Program]], savedAt: Date?, for playlistId: String) {
+        let now = Date()
+        var next = epg
+        for ch in library.channels where ch.playlistId == playlistId {
+            next[ch.id] = EpgEntry(programs: programs[ch.id] ?? [], fetched: now, failed: false)
+        }
+        epg = next
+        guideLoadedFor = playlistId
+        guideUpdated = savedAt
+        guideChannelCount = programs.values.filter { !$0.isEmpty }.count
     }
 
     /// The program on now and the one after it, if the guide has them.

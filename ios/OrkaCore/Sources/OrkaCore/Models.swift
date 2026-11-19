@@ -84,10 +84,13 @@ public struct Channel: Codable, Hashable, Identifiable, Sendable {
 public struct LiveData: Codable, Sendable {
     public var categories: [ChannelCategory]
     public var channels: [Channel]
+    /// Guide (XMLTV) links an M3U playlist names in its header.
+    public var guideURLs: [String]?
 
-    public init(categories: [ChannelCategory], channels: [Channel]) {
+    public init(categories: [ChannelCategory], channels: [Channel], guideURLs: [String]? = nil) {
         self.categories = categories
         self.channels = channels
+        self.guideURLs = guideURLs
     }
 }
 

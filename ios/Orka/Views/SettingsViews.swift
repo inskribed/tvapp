@@ -145,6 +145,25 @@ struct SettingsView: View {
                 }
             }
             .disabled(model.allChannelCount == 0)
+            if model.active?.isM3U == true {
+                LabeledContent("TV guide") {
+                    switch model.guideState {
+                    case .syncing: Text("Updating…").foregroundStyle(.secondary)
+                    case .failed(let message): Text(message).foregroundStyle(.red).lineLimit(1)
+                    case .idle:
+                        if !model.guideHasSource && model.guideUpdated == nil {
+                            Text("No guide link").foregroundStyle(.secondary)
+                        } else if let at = model.guideUpdated {
+                            Text("\(model.guideChannelCount) channels · \(at.formatted(.relative(presentation: .named)))")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Not loaded").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button("Update guide now") { model.loadGuide(force: true) }
+                    .disabled(model.guideState == .syncing)
+            }
             LabeledContent("Movies") { Text("Coming soon").foregroundStyle(.secondary) }
             LabeledContent("Series") { Text("Coming soon").foregroundStyle(.secondary) }
         } header: {

@@ -87,7 +87,7 @@ public enum M3UParser {
             }
         }
         let cats = groups.map { ChannelCategory(id: $0, name: $0) }
-        return Result(data: LiveData(categories: cats, channels: channels), guideURLs: guideURLs)
+        return Result(data: LiveData(categories: cats, channels: channels, guideURLs: guideURLs), guideURLs: guideURLs)
     }
 
     // MARK: Pieces
