@@ -108,6 +108,8 @@ fun SettingsScreen(vm: AppViewModel) {
                         if (p.id == vm.active?.id) DimText("In use", size = 13)
                     }
                     Spacer(Modifier.width(12.dp))
+                    TvButton("Edit", onClick = { vm.startEditing(p) })
+                    Spacer(Modifier.width(12.dp))
                     TvButton("Remove", onClick = { vm.deletePlaylist(p.id) }, danger = true)
                 }
             }
@@ -244,17 +246,19 @@ private fun SettingToggle(title: String, value: String, hint: String, onClick: (
 
 @Composable
 fun AddPlaylistScreen(vm: AppViewModel) {
-    var m3u by rememberSaveable { mutableStateOf(false) }
-    var name by rememberSaveable { mutableStateOf("") }
-    var server by rememberSaveable { mutableStateOf("") }
-    var user by rememberSaveable { mutableStateOf("") }
-    var pass by rememberSaveable { mutableStateOf("") }
-    var link by rememberSaveable { mutableStateOf("") }
-    var guide by rememberSaveable { mutableStateOf("") }
+    // Editing an existing playlist reuses this screen, filled in with its details.
+    val editing = vm.editingPlaylist
+    var m3u by rememberSaveable { mutableStateOf(editing?.isM3u ?: false) }
+    var name by rememberSaveable { mutableStateOf(editing?.name ?: "") }
+    var server by rememberSaveable { mutableStateOf(if (editing?.isM3u == false) editing.server else "") }
+    var user by rememberSaveable { mutableStateOf(editing?.username ?: "") }
+    var pass by rememberSaveable { mutableStateOf(editing?.password ?: "") }
+    var link by rememberSaveable { mutableStateOf(if (editing?.isM3u == true) editing.server else "") }
+    var guide by rememberSaveable { mutableStateOf(editing?.epgUrl ?: "") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
-    androidx.activity.compose.BackHandler { vm.showAddPlaylist = false }
+    androidx.activity.compose.BackHandler { vm.closePlaylistEditor() }
 
     LaunchedEffect(Unit) {
         delay(100)
@@ -269,25 +273,37 @@ fun AddPlaylistScreen(vm: AppViewModel) {
             busy = false
             error = err
         }
-        if (m3u) vm.addM3uPlaylist(name, link, guide, done) else vm.addPlaylist(name, server, user, pass, done)
+        when {
+            editing != null -> vm.updatePlaylist(editing, name, server, user, pass, link, guide, done)
+            m3u -> vm.addM3uPlaylist(name, link, guide, done)
+            else -> vm.addPlaylist(name, server, user, pass, done)
+        }
     }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(Modifier.width(680.dp)) {
             ScreenTitle(
-                "Add a playlist",
-                if (m3u) "Paste or type an M3U playlist link from a legal source." else "Enter the Xtream login from your provider.",
+                if (editing != null) "Edit playlist" else "Add a playlist",
+                when {
+                    editing != null -> "Change the details, then save. Orka checks they work first."
+                    m3u -> "Paste or type an M3U playlist link from a legal source."
+                    else -> "Enter the Xtream login from your provider."
+                },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton(
-                    (if (!m3u) "✓ " else "") + "Xtream login",
-                    onClick = { m3u = false; error = null },
-                    modifier = Modifier.focusRequester(first),
-                )
-                TvButton((if (m3u) "✓ " else "") + "M3U link", onClick = { m3u = true; error = null })
+            if (editing == null) {
+                // The type can't change while editing; add a new playlist for that.
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TvButton(
+                        (if (!m3u) "✓ " else "") + "Xtream login",
+                        onClick = { m3u = false; error = null },
+                        modifier = Modifier.focusRequester(first),
+                    )
+                    TvButton((if (m3u) "✓ " else "") + "M3U link", onClick = { m3u = true; error = null })
+                }
+                Spacer(Modifier.height(18.dp))
             }
-            Spacer(Modifier.height(18.dp))
-            TvTextField(name, { name = it }, "Name (optional)", Modifier.fillMaxWidth(),
+            TvTextField(name, { name = it }, if (editing != null) "Name" else "Name (optional)",
+                if (editing != null) Modifier.fillMaxWidth().focusRequester(first) else Modifier.fillMaxWidth(),
                 placeholder = if (m3u) "Free TV" else "My provider")
             Spacer(Modifier.height(14.dp))
             if (m3u) {
@@ -298,9 +314,9 @@ fun AddPlaylistScreen(vm: AppViewModel) {
                     placeholder = "https://example.com/guide.xml", keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Done, onDone = { submit() })
                 Spacer(Modifier.height(14.dp))
-                Text("Free and legal to try", fontSize = 14.sp, color = AppColors.TextDim)
+                if (editing == null) Text("Free and legal to try", fontSize = 14.sp, color = AppColors.TextDim)
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (editing == null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FREE_SOURCES.forEach { (label, url) ->
                         TvButton(label, onClick = {
                             link = url
@@ -320,10 +336,14 @@ fun AddPlaylistScreen(vm: AppViewModel) {
             Spacer(Modifier.height(22.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 TvButton(
-                    if (busy) (if (m3u) "Loading playlist…" else "Connecting…") else "Save and connect",
+                    when {
+                        busy -> if (m3u) "Loading playlist…" else "Connecting…"
+                        editing != null -> "Save changes"
+                        else -> "Save and connect"
+                    },
                     onClick = { submit() },
                 )
-                TvButton("Cancel", onClick = { vm.showAddPlaylist = false })
+                TvButton("Cancel", onClick = { vm.closePlaylistEditor() })
             }
             error?.let {
                 Spacer(Modifier.height(14.dp))

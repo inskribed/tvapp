@@ -88,6 +88,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var account by mutableStateOf<AccountInfo?>(null)
         private set
     var showAddPlaylist by mutableStateOf(false)
+    /** Set while the add-playlist screen is editing an existing playlist (same screen, prefilled). */
+    var editingPlaylist by mutableStateOf<Playlist?>(null)
 
     // Channels
     var categories by mutableStateOf<List<Category>>(emptyList())
@@ -242,6 +244,86 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 onResult("Couldn't load that playlist: ${friendly(e)}")
+            }
+        }
+    }
+
+    fun startEditing(p: Playlist) {
+        editingPlaylist = p
+        showAddPlaylist = true
+    }
+
+    fun closePlaylistEditor() {
+        showAddPlaylist = false
+        editingPlaylist = null
+    }
+
+    /**
+     * Saves changes to an existing playlist after checking the new details work. The playlist keeps
+     * its id, so favorites, hidden groups and recents stay attached to it.
+     */
+    fun updatePlaylist(
+        old: Playlist,
+        name: String,
+        server: String,
+        username: String,
+        password: String,
+        link: String,
+        guideLink: String,
+        onResult: (String?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            try {
+                val updated: Playlist
+                if (old.isM3u) {
+                    if (link.isBlank()) {
+                        onResult("Please enter the playlist link.")
+                        return@launch
+                    }
+                    val url = client.normalizeLink(link)
+                    val candidate = old.copy(
+                        name = name.trim().ifBlank { old.name },
+                        server = url,
+                        epgUrl = guideLink.trim().takeIf { it.isNotEmpty() }?.let { client.normalizeLink(it) },
+                    )
+                    // Downloads the playlist again (and saves it, so the guide refreshes right away).
+                    val result = repo.fetchM3u(candidate)
+                    if (result.data.channels.isEmpty()) {
+                        onResult("That playlist has no channels Orka can play.")
+                        return@launch
+                    }
+                    updated = if (candidate.epgUrl == null && result.guideUrls.isNotEmpty()) {
+                        candidate.copy(epgUrl = result.guideUrls.first())
+                    } else candidate
+                } else {
+                    if (server.isBlank() || username.isBlank() || password.isBlank()) {
+                        onResult("Please fill in the server, username and password.")
+                        return@launch
+                    }
+                    val candidate = old.copy(
+                        name = name.trim().ifBlank { old.name },
+                        server = client.normalizeServer(server),
+                        username = username.trim(),
+                        password = password.trim(),
+                    )
+                    val info = client.authenticate(candidate)
+                    if (!info.ok) {
+                        onResult(info.message ?: "Login failed.")
+                        return@launch
+                    }
+                    // Login details changed: the saved channel list may be from the old account.
+                    if (candidate.server != old.server || candidate.username != old.username) repo.clear(old.id)
+                    updated = candidate
+                }
+                playlists = playlists.map { if (it.id == old.id) updated else it }
+                prefs.savePlaylists(playlists)
+                closePlaylistEditor()
+                if (activeId == old.id || active?.id == old.id) setActive(old.id)
+                onResult(null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onResult((if (old.isM3u) "Couldn't load that playlist: " else "Couldn't connect: ") + friendly(e))
             }
         }
     }

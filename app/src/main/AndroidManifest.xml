@@ -20,16 +20,29 @@
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
-            android:exported="true"
+            android:exported="false"
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
-            android:windowSoftInputMode="adjustNothing">
+            android:windowSoftInputMode="adjustNothing" />
+
+        <!--
+            The home-screen entry. It's an alias (not MainActivity itself) so TV launchers that
+            cache icons, like Google TV on the onn, see a new entry and load the Orka icon/banner
+            fresh. Keep this name from now on; renaming it would move Orka in the apps row again.
+        -->
+        <activity-alias
+            android:name=".OrkaLauncher"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:banner="@drawable/banner_orka"
+            android:icon="@mipmap/ic_orka"
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <provider
             android:name="androidx.core.content.FileProvider"

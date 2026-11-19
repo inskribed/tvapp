@@ -102,7 +102,13 @@ fun AppRoot(vm: AppViewModel) {
 @Composable
 private fun MainScreen(vm: AppViewModel) {
     val contentFocus = remember { FocusRequester() }
+    val menuFocus = remember { FocusRequester() }
     var sidebarOpen by remember { mutableStateOf(true) }
+    // Back with nothing else to close opens the side menu; Back again from the menu leaves Orka
+    // (this handler is off while the menu has focus, so Android closes the app as usual).
+    // Registered before the screens below, so their own Back steps (guide groups, game details,
+    // the player...) come first.
+    BackHandler(enabled = !sidebarOpen) { runCatching { menuFocus.requestFocus() } }
     val isGuide = vm.section == Section.GUIDE
     // TV Guide, TiviMate-style: inside the channels the menu slides away and the guide uses the full
     // width; otherwise the guide sits beside the collapsed menu. Done as a slide (read only while
@@ -137,6 +143,7 @@ private fun MainScreen(vm: AppViewModel) {
             hidden = guideHidesMenu,
             onOpenChange = { sidebarOpen = it },
             toContent = { runCatching { contentFocus.requestFocus() } },
+            firstFocus = menuFocus,
         )
     }
 }
@@ -150,8 +157,14 @@ private fun MenuDim(open: Boolean) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Sidebar(vm: AppViewModel, open: Boolean, hidden: Boolean, onOpenChange: (Boolean) -> Unit, toContent: () -> Unit) {
-    val firstFocus = remember { FocusRequester() }
+private fun Sidebar(
+    vm: AppViewModel,
+    open: Boolean,
+    hidden: Boolean,
+    onOpenChange: (Boolean) -> Unit,
+    toContent: () -> Unit,
+    firstFocus: FocusRequester,
+) {
     LaunchedEffect(Unit) {
         delay(100)
         runCatching { firstFocus.requestFocus() }

@@ -161,6 +161,14 @@ Movies/Series, program search, widgets.
   `drawable-xhdpi|xxhdpi/banner_orka.png`; launcher icon `@mipmap/ic_orka`). Resources were renamed
   from ic_launcher/banner so TV launchers that cache icons pick up the new ones. The accent pref key is versioned (`accent_color_v2`).
 - Font: Inter (static TTFs in `res/font`, applied via `LocalTextStyle` in `Theme.kt`).
+- Back on the TV: each screen's own steps first (player → mini, guide channels → groups, detail
+  screens close); with nothing left, Back opens the side menu (`MainScreen` BackHandler, off while
+  the menu has focus); Back from the menu stops a mini player if one is running, then leaves Orka.
+- The home-screen entry is the `<activity-alias android:name=".OrkaLauncher">` (MainActivity is not
+  exported). It was added so Google TV on the onn reloads the Orka icon; don't rename it.
+- Playlists can be edited (Settings → Edit; same screen as Add, prefilled; type is fixed). Saving
+  re-checks the login or re-downloads the M3U, keeps the playlist id (favorites/hidden groups stay),
+  and reloads it if it's the one in use. Same on iPhone (Settings → swipe or ⓘ → Edit).
 - Hold OK on a channel = toggle favorite.
 - Settings: multiple playlists, TS/HLS format, compact list, show/hide scores, my teams.
 
