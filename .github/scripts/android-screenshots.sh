@@ -39,8 +39,9 @@ key KEYCODE_DPAD_DOWN;   key KEYCODE_DPAD_DOWN;  shot 06-other-group 2
 key KEYCODE_DPAD_LEFT;   key KEYCODE_DPAD_DOWN;  shot 07-sports-menu 2
 key KEYCODE_DPAD_RIGHT;  shot 08-sports 2
 key KEYCODE_DPAD_LEFT;   key KEYCODE_DPAD_DOWN;  key KEYCODE_DPAD_RIGHT; shot 09-favorites 2
-key KEYCODE_DPAD_LEFT;   key KEYCODE_DPAD_DOWN;  key KEYCODE_DPAD_RIGHT; shot 10-search 2
-key KEYCODE_DPAD_LEFT;   key KEYCODE_DPAD_DOWN;  key KEYCODE_DPAD_RIGHT; shot 11-settings 2
+# Search: stay in the menu (going into the search box opens the on-screen keyboard).
+key KEYCODE_DPAD_LEFT;   key KEYCODE_DPAD_DOWN;  shot 10-search-menu 2
+key KEYCODE_DPAD_DOWN;   key KEYCODE_DPAD_RIGHT; shot 11-settings 2
 for i in 1 2 3 4 5 6; do key KEYCODE_DPAD_DOWN 0.6; done; shot 12-settings-lower 1.5
 for i in 1 2 3 4 5 6; do key KEYCODE_DPAD_DOWN 0.6; done; shot 13-settings-more 1.5
 adb logcat -d -s OrkaDemo:I > "$OUT/demo-log.txt"
