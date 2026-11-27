@@ -519,6 +519,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Starts the M3U guide over, for example after the shown groups changed (which changes which
+     * guide files are needed).
+     */
+    fun reloadGuide() {
+        guideJob?.cancel()
+        guideJob = null
+        loadGuide(force = true)
+    }
+
     /** Puts the guide on every channel of the playlist (channels it doesn't cover show "No guide info"). */
     private fun applyGuide(programs: Map<String, List<Program>>, savedAt: Long?, playlistId: String) {
         val now = System.currentTimeMillis()

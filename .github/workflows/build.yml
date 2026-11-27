@@ -8,6 +8,8 @@ on:
       - 'ios/**'
       - 'design/**'
       - '.github/workflows/ios.yml'
+      - '.github/workflows/screenshots.yml'
+      - '.github/scripts/**'
   workflow_dispatch:
 
 permissions:

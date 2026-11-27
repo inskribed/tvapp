@@ -23,7 +23,15 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $model.showPlayer) { PlayerView() }
         .sheet(isPresented: $model.showSettings) { SettingsView() }
-        .task { await model.bootstrap() }
+        .task {
+            #if DEBUG
+            await DemoMode.prepare(model)
+            #endif
+            await model.bootstrap()
+            #if DEBUG
+            await DemoMode.arrange(model)
+            #endif
+        }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active: model.appBecameActive()

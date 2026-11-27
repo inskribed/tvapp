@@ -1,0 +1,114 @@
+name: Screenshots
+
+# Starts an Android TV emulator and an iPhone simulator, loads a free playlist (Free-TV), walks
+# through the screens and photographs them. The pictures are attached to the run and published
+# as the "screenshots" release (a pre-release, so it never becomes the app's "latest" update).
+# Run it by hand: Actions > Screenshots > Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build the debug app
+        run: gradle assembleDebug --no-daemon
+
+      - name: Allow the emulator to use hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Photograph the TV app
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          force-avd-creation: false
+          disable-animations: true
+          script: bash .github/scripts/android-screenshots.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-android
+          path: screenshots/android
+          if-no-files-found: warn
+
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode 26
+        run: |
+          NEW=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$NEW" ]; then sudo xcode-select -s "$NEW"; fi
+          xcodebuild -version
+
+      - name: Install XcodeGen and generate the project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build the app for the simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build -project Orka.xcodeproj -scheme Orka -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            | tail -n 15
+
+      - name: Photograph the iPhone app
+        run: bash .github/scripts/ios-screenshots.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-ios
+          path: screenshots/ios
+          if-no-files-found: warn
+
+  publish:
+    needs: [android, ios]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: screenshots-*
+          path: shots
+          merge-multiple: true
+
+      - run: ls -la shots || true
+
+      - name: Publish as the "screenshots" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: screenshots
+          name: Screenshots (latest run)
+          body: Pictures of the Android TV and iPhone apps from the Screenshots workflow. Not an app update.
+          prerelease: true
+          make_latest: false
+          files: shots/*
+          fail_on_unmatched_files: false

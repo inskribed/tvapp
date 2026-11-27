@@ -633,6 +633,22 @@ final class AppModel {
 
     // MARK: M3U guide (XMLTV)
 
+    /// Starts the M3U guide over, for example after the shown groups changed (which changes which
+    /// guide files are needed).
+    func reloadGuide() {
+        guideTask?.cancel()
+        guideTask = nil
+        loadGuide(force: true)
+    }
+
+    #if DEBUG
+    /// Screenshot workflow only.
+    func demoSetRecents(_ list: [Channel]) {
+        recents = list
+        store.save(recents, key: "recents")
+    }
+    #endif
+
     /// Which guide files to use: a link you typed wins; otherwise the playlist's own list, cut down to
     /// the countries of the channels you've kept shown (Free-TV lists 100+ files).
     private func guideSources(for p: Playlist) -> [String] {
