@@ -722,6 +722,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Updates ---------------------------------------------------------
 
     fun checkForUpdate(manual: Boolean) {
+        // Test builds (debug) carry a throwaway version number, so they'd always see "an update".
+        if (BuildConfig.DEBUG && !manual) return
         if (checkingUpdate) return
         viewModelScope.launch {
             checkingUpdate = true
