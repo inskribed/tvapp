@@ -134,6 +134,24 @@ Movies/Series, program search, widgets.
   module added); iPhone plays HLS only.
 - Add playlist has one-tap Free-TV / iptv-org buttons (`FREE_SOURCES` / `freeSources`).
 
+## Screenshots (both apps)
+
+`.github/workflows/screenshots.yml` (manual: Actions → Screenshots → Run workflow, input `which` =
+both/android/ios) runs an Android TV emulator (API 30, tv_1080p, KVM) and an iPhone 17 Pro simulator,
+loads the free Free-TV playlist (keeping only USA/UK/Canada/Australia/Ireland groups, 6 favorites,
+Cowboys + Lakers as "my teams"), walks through the screens and photographs them. Pictures are
+attached to the run and published as the **`screenshots` pre-release** (never "latest", so it can't
+become an app update): `https://github.com/inskribed/tvapp/releases/tag/screenshots`; files are
+`android-NN-*.png` / `ios-NN-*.png` and can be curl'd from the sandbox.
+- Debug-only demo hooks (absent from release builds): Android `src/debug/.../DemoHook.kt`
+  (intent extras `demo_*`; release has a no-op stub) and iOS `ios/Orka/DemoMode.swift` (`#if DEBUG`,
+  launch args `-orka*`). Android is started through the exported `.OrkaLauncher` alias (MainActivity
+  isn't exported, so `am start` of it is refused); the script then drives the remote with
+  `adb shell input keyevent`. iOS relaunches per screen and waits for `tmp/orka_demo_ready`.
+- Debug builds skip the automatic update check (their version number is a throwaway).
+- Search on the TV: don't press RIGHT into the search box in the script (opens the keyboard).
+- Both apps show the real guide (XMLTV) and live ESPN data from the runners' internet access.
+
 ## Product decisions already made
 
 - App opens to the TV Guide (the old Live TV list section was removed; the guide's List view
