@@ -6,12 +6,19 @@ name: Screenshots
 # Run it by hand: Actions > Screenshots > Run workflow.
 on:
   workflow_dispatch:
+    inputs:
+      which:
+        description: Which app to photograph
+        type: choice
+        options: [both, android, ios]
+        default: both
 
 permissions:
   contents: write
 
 jobs:
   android:
+    if: ${{ inputs.which != 'ios' }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -54,6 +61,7 @@ jobs:
           if-no-files-found: warn
 
   ios:
+    if: ${{ inputs.which != 'android' }}
     runs-on: macos-26
     timeout-minutes: 40
     steps:

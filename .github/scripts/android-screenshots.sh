@@ -14,7 +14,9 @@ shot() { sleep "${2:-1.5}"; adb exec-out screencap -p > "$OUT/android-$1.png"; e
 key()  { adb shell input keyevent "$1"; sleep "${2:-1.5}"; }
 
 adb logcat -c
-adb shell am start -n "$PKG/.MainActivity" \
+# Started through the exported home-screen entry (MainActivity itself isn't exported, so the
+# command line is not allowed to start it directly). The extras are passed on to the app.
+adb shell am start -W -n "$PKG/.OrkaLauncher" \
   --es demo_m3u "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8" \
   --es demo_keep "USA,UK,Canada,Australia,Ireland" \
   --es demo_favorites 6 \
@@ -22,7 +24,7 @@ adb shell am start -n "$PKG/.MainActivity" \
   --es demo_section guide
 
 # Up to 5 minutes for the playlist, groups and guide.
-for i in $(seq 1 150); do
+for i in $(seq 1 120); do
   adb logcat -d -s OrkaDemo:I | grep -q READY && break
   sleep 2
 done
